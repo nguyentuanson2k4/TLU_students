@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Provider {
+  LOCAL
+  GOOGLE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String?  // Có thể null nếu đăng nhập bằng Google
+  firstName String?
+  lastName  String?
+  role      Role     @default(USER)
+  provider  Provider @default(LOCAL)
+  providerId String? // ID trả về từ Google nếu có
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
