@@ -11,8 +11,8 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+  async validateUser(username: string, pass: string): Promise<any> {
+    const user = await this.usersService.findByUsername(username);
     if (!user || !user.password) {
       return null;
     }
@@ -24,65 +24,78 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
-    const payload = { email: user.email, sub: user.id, role: user.role };
+  async getTokens(userId: string | bigint, username: string, role: string) {
+    const payload = { username, sub: userId.toString(), role };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_SECRET || 'defaultSecretKey',
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET || 'refreshKey',
+        expiresIn: '7d',
+      }),
+    ]);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  async login(user: any) {
+    const tokens = await this.getTokens(user.id, user.username, user.role);
+    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
+
+    return {
+      ...tokens,
       user: {
-        id: user.id,
-        email: user.email,
+        id: user.id.toString(),
+        username: user.username,
         role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
       }
     };
   }
 
-  async register(data: Prisma.UserCreateInput) {
-    const existingUser = await this.usersService.findByEmail(data.email);
-    if (existingUser) {
-      throw new ConflictException('Email đã tồn tại!');
+  async logout(userId: string | bigint) {
+    await this.usersService.removeRefreshToken(userId);
+  }
+
+  async refreshTokens(userId: string | bigint, refreshToken: string) {
+    const user = await this.usersService.getUserIfRefreshTokenMatches(
+      refreshToken,
+      userId,
+    );
+    if (!user) {
+      throw new UnauthorizedException('Access Denied');
     }
-    
-    // Hash password
-    if (data.password) {
-      const salt = await bcrypt.genSalt();
-      data.password = await bcrypt.hash(data.password, salt);
-    }
-    
-    const newUser = await this.usersService.create(data);
-    const { password, ...result } = newUser;
-    return result;
+
+    const tokens = await this.getTokens(user.id, user.username, user.role);
+    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
+    return tokens;
   }
 
   async googleLogin(req) {
-    if (!req.user) {
+    if (!req.user || !req.user.email) {
       return 'No user from google';
     }
     
-    let user = await this.usersService.findByEmail(req.user.email);
+    let user = await this.usersService.findUserBySystemEmail(req.user.email);
     
     if (!user) {
-      // Create new user using Google profile
-      user = await this.usersService.create({
-        email: req.user.email,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        provider: 'GOOGLE',
-        providerId: req.user.providerId,
-      });
+      throw new UnauthorizedException('Email này chưa được liên kết với bất kỳ tài khoản sinh viên hay giảng viên nào trong hệ thống.');
     }
 
-    // Generate JWT for Google User
-    const payload = { email: user.email, sub: user.id, role: user.role };
+    const tokens = await this.getTokens(user.id, user.username, user.role);
+    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      ...tokens,
       user: {
-        id: user.id,
-        email: user.email,
+        id: user.id.toString(),
+        username: user.username,
         role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
       }
     };
   }

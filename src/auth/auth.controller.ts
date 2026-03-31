@@ -3,20 +3,34 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { Prisma } from '@prisma/client';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ResponseMessage } from '../common/decorators/response-message.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Post('register')
-  async register(@Body() createUserDto: Prisma.UserCreateInput) {
-    return this.authService.register(createUserDto);
-  }
-
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Request() req) {
     return this.authService.login(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  @ResponseMessage('Đăng xuất thành công')
+  async logout(@Request() req) {
+    await this.authService.logout(req.user.userId || req.user.id);
+    return null;
+  }
+
+  @UseGuards(JwtRefreshGuard)
+  @Post('refresh')
+  async refreshTokens(@Request() req) {
+    const userId = req.user.id || req.user.userId;
+    const refreshToken = req.headers.authorization.replace('Bearer ', '').trim();
+    return this.authService.refreshTokens(userId, refreshToken);
   }
 
   @Get('google')
