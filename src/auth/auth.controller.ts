@@ -1,4 +1,5 @@
 import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
@@ -6,18 +7,21 @@ import { Prisma } from '@prisma/client';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ResponseMessage } from '../common/decorators/response-message.decorator';
+import { LoginDto, ForgotPasswordDto, VerifyOtpDto, ResetPasswordDto } from './dto/auth.dto';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
-  
+  constructor(private authService: AuthService) { }
 
+  @ApiBody({ type: LoginDto })
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Request() req) {
     return this.authService.login(req.user);
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @ResponseMessage('Đăng xuất thành công')
@@ -26,6 +30,7 @@ export class AuthController {
     return null;
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   async refreshTokens(@Request() req) {
@@ -47,18 +52,17 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  async forgotPassword(@Body('email') email: string) {
-    return this.authService.forgotPassword(email);
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
   @Post('verify-otp')
-  async verifyOtp(@Body('email') email: string, @Body('otp') otp: string) {
-    return this.authService.verifyOtp(email, otp);
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto.email, verifyOtpDto.otp);
   }
 
   @Post('reset-password')
-  async resetPassword(@Body() body: any) {
-    const { email, otp, newPassword } = body;
-    return this.authService.resetPassword(email, otp, newPassword);
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.otp, resetPasswordDto.newPassword);
   }
 }

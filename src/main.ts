@@ -2,6 +2,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 // Polyfill BigInt serialization to avoid JSON.stringify errors
 (BigInt.prototype as any).toJSON = function () {
@@ -14,6 +15,15 @@ async function bootstrap() {
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  const config = new DocumentBuilder()
+    .setTitle('API Documentation')
+    .setDescription('The API description')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, documentFactory);
 
   let basePort = parseInt(process.env.PORT || '3000', 10);
 

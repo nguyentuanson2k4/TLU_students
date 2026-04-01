@@ -10,13 +10,17 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ResponseMessage } from '../common/decorators/response-message.decorator';
+import { CreateUserDto, UpdateUserDto, UserFilterDto } from '../users/dto/user.dto';
 
+@ApiTags('Admin')
+@ApiBearerAuth()
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.LECTURER)
@@ -26,16 +30,13 @@ export class AdminController {
   
   @Get('users')
   @ResponseMessage('Lấy danh sách người dùng thành công')
-  async getAllUsers(
-    @Query('role') role?: Role,
-    @Query('is_active') is_active?: string,
-  ) {
+  async getAllUsers(@Query() filterDto: UserFilterDto) {
     const filters: any = {};
-    if (role) {
-      filters.role = role;
+    if (filterDto.role) {
+      filters.role = filterDto.role;
     }
-    if (is_active !== undefined) {
-      filters.is_active = is_active === 'true';
+    if (filterDto.is_active !== undefined) {
+      filters.is_active = filterDto.is_active === 'true';
     }
 
     return this.adminService.getAllUsers(filters);
@@ -51,7 +52,7 @@ export class AdminController {
 
   @Post('users')
   @ResponseMessage('Tạo người dùng mới thành công')
-  async createUser(@Body() userData: any) {
+  async createUser(@Body() userData: CreateUserDto) {
     return this.adminService.createUser(userData);
   }
 
@@ -60,7 +61,7 @@ export class AdminController {
   @ResponseMessage('Cập nhật thông tin người dùng thành công')
   async updateUser(
     @Param('id') userId: string,
-    @Body() updateData: any,
+    @Body() updateData: UpdateUserDto,
   ) {
     return this.adminService.updateUser(userId, updateData);
   }
