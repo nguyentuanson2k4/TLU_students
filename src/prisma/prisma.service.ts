@@ -8,7 +8,10 @@ import 'dotenv/config';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     const connectionString = process.env.DATABASE_URL;
-    const pool = new Pool({ connectionString });
+    const pool = new Pool({ 
+      connectionString,
+      ssl: { rejectUnauthorized: false }
+    });
     const adapter = new PrismaPg(pool as any);
     super({ adapter });
   }

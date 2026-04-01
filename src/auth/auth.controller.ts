@@ -44,4 +44,20 @@ export class AuthController {
   googleAuthRedirect(@Request() req) {
     return this.authService.googleLogin(req);
   }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string) {
+    return this.authService.forgotPassword(email);
+  }
+
+  @Post('verify-otp')
+  async verifyOtp(@Body('email') email: string, @Body('otp') otp: string) {
+    return this.authService.verifyOtp(email, otp);
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: any) {
+    const { email, otp, newPassword } = body;
+    return this.authService.resetPassword(email, otp, newPassword);
+  }
 }

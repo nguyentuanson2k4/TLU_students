@@ -165,4 +165,27 @@ export class UsersService {
     }
     return null;
   }
+
+  async saveOtp(userId: string | bigint, otp: string) {
+    const expires = new Date();
+    expires.setMinutes(expires.getMinutes() + 5);
+
+    await this.prisma.user.update({
+      where: { id: typeof userId === 'string' ? BigInt(userId) : userId },
+      data: {
+        reset_password_otp: otp,
+        reset_password_expires: expires,
+      },
+    });
+  }
+
+  async clearOtp(userId: string | bigint) {
+    await this.prisma.user.update({
+      where: { id: typeof userId === 'string' ? BigInt(userId) : userId },
+      data: {
+        reset_password_otp: null,
+        reset_password_expires: null,
+      },
+    });
+  }
 }

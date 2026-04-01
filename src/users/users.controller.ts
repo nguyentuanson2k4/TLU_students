@@ -9,7 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @Roles(Role.ADMIN)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post()
   create(@Body() createProfileDto: any) {
