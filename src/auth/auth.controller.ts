@@ -10,6 +10,7 @@ import { ResponseMessage } from '../common/decorators/response-message.decorator
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+  
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
