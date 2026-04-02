@@ -17,7 +17,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ResponseMessage } from '../common/decorators/response-message.decorator';
-import { CreateUserDto, UpdateUserDto, UserFilterDto } from '../users/dto/user.dto';
+import { CreateUserDto } from '../users/dto/user.dto';
+import { UpdateUserDto, UserFilterDto } from './dto/admin.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()

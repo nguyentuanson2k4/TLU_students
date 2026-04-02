@@ -1,24 +1,25 @@
 import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, User, Role } from '@prisma/client';
+import { User, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(data: any): Promise<any> {
-    if (!data.phone_number) {
-      throw new BadRequestException('Số điện thoại là bắt buộc để làm username.');
+    const role = data.role as Role || Role.ADMIN;
+    const username = data.username;
+    
+    if (!username) {
+      throw new BadRequestException('Username là bắt buộc.');
     }
-
-    const username = data.phone_number;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { username },
     });
     if (existingUser) {
-      throw new ConflictException('Tài khoản với số điện thoại này đã tồn tại!');
+      throw new ConflictException(`Tài khoản với username ${username} đã tồn tại!`);
     }
 
     let hashedPassword = data.password;
@@ -29,54 +30,20 @@ export class UsersService {
       throw new BadRequestException('Mật khẩu là bắt buộc.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Create Base User
-      const newUser = await tx.user.create({
-        data: {
-          username: username,
-          password: hashedPassword,
-          role: data.role as Role || Role.STUDENT,
-        },
-      });
-
-      // 2. Link Profile
-      if (newUser.role === Role.STUDENT) {
-        await tx.student.create({
-          data: {
-            user_id: newUser.id,
-            student_code: data.student_code,
-            full_name: data.full_name,
-            dob: new Date(data.dob),
-            gender: data.gender,
-            phone_number: data.phone_number,
-            class_name: data.class_name,
-            address: data.address,
-            email: data.email,
-            major_name: data.major_name,
-            department_name: data.department_name,
-          },
-        });
-      } else if (newUser.role === Role.LECTURER) {
-        await tx.lecturer.create({
-          data: {
-            user_id: newUser.id,
-            lecturer_code: data.lecturer_code,
-            full_name: data.full_name,
-            department: data.department || "General",
-            phone_number: data.phone_number,
-            email: data.email,
-            major_name: data.major_name,
-            degree: data.degree,
-          },
-        });
-      }
-
-      const { password, ...result } = newUser;
-      return {
-        ...result,
-        id: result.id.toString(),
-      };
+    // Insert Base User
+    const newUser = await this.prisma.user.create({
+      data: {
+        username: username,
+        password: hashedPassword,
+        role: role,
+      },
     });
+
+    const { password, ...result } = newUser;
+    return {
+      ...result,
+      id: result.id.toString(),
+    };
   }
 
   async findAll(): Promise<User[]> {
@@ -96,7 +63,6 @@ export class UsersService {
   }
 
   async findUserBySystemEmail(email: string): Promise<User | null> {
-    // Check in Student table first
     const student = await this.prisma.student.findUnique({
       where: { email },
     });
@@ -104,7 +70,6 @@ export class UsersService {
       return this.prisma.user.findUnique({ where: { id: student.user_id } });
     }
 
-    // Check in Lecturer table
     const lecturer = await this.prisma.lecturer.findUnique({
       where: { email },
     });
@@ -115,7 +80,7 @@ export class UsersService {
     return null;
   }
 
-  async update(id: string | bigint, data: Prisma.UserUpdateInput): Promise<User> {
+  async update(id: string | bigint, data: any): Promise<User> {
     return this.prisma.user.update({
       where: { id: typeof id === 'string' ? BigInt(id) : id },
       data,
