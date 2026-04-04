@@ -10,107 +10,77 @@ import {
   NotificationType,
 } from './dtos/notification.dto';
 import { Prisma, Role } from '@prisma/client';
+import { NotificationsPublisher } from './notifications.publisher';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly publisherService: NotificationsPublisher,
+  ) {}
 
+  /**
+   * sendNotification - HTTP endpoint handler
+   * Validates input and publishes to RabbitMQ queue for async processing
+   * Returns immediately with 'queued' status (~50-100ms)
+   *
+   * Actual recipient resolution and DB insertion happens asynchronously
+   * via NotificationsFanoutService in the RabbitMQ consumer
+   */
   async sendNotification(
     data: CreateNotificationDto,
     senderId: number,
   ): Promise<{
-    id: string;
-    recipientCount: number;
+    status: string;
     message: string;
   }> {
     this.logger.log(
-      `Sending ${data.notification_type} notification: "${data.title}"`,
+      `[Service] Validating notification: ${data.notification_type} - "${data.title}"`,
     );
 
-    let recipientUserIds: bigint[] = [];
+    // Input validation for required fields
+    if (!data.title || data.title.length < 5) {
+      throw new BadRequestException('Title must be at least 5 characters');
+    }
+    if (!data.message || data.message.length < 10) {
+      throw new BadRequestException('Message must be at least 10 characters');
+    }
 
-    switch (data.notification_type) {
-      case NotificationType.BROADCAST:
-        const allUsers = await this.prisma.user.findMany({
-          where: { is_active: true },
-          select: { id: true },
-        });
-        recipientUserIds = allUsers.map((u) => u.id);
-        this.logger.debug(`Broadcast to ${recipientUserIds.length} users`);
-        break;
-
-      case NotificationType.STUDENT_ONLY:
-        const students = await this.prisma.student.findMany({
-          select: { user_id: true },
-        });
-        recipientUserIds = students.map((s) => s.user_id);
-        this.logger.debug(`Send to ${recipientUserIds.length} students`);
-        break;
-
-      case NotificationType.CLASS:
-        if (!data.course_class_id) {
-          throw new BadRequestException(
-            'course_class_id là bắt buộc cho thông báo loại CLASS',
-          );
-        }
-
-        const courseClass = await this.prisma.courseClass.findUnique({
-          where: { id: BigInt(data.course_class_id) },
-        });
-        if (!courseClass) {
-          throw new NotFoundException(
-            `Lớp học với ID ${data.course_class_id} không tồn tại`,
-          );
-        }
-
-        const enrollments = await this.prisma.classEnrollment.findMany({
-          where: { course_class_id: BigInt(data.course_class_id) },
-          select: { student: { select: { user_id: true } } },
-        });
-        recipientUserIds = enrollments.map((e) => e.student.user_id);
-        this.logger.debug(
-          `Send to ${recipientUserIds.length} students in class ${data.course_class_id}`,
+    // CLASS type specific validation
+    if (data.notification_type === NotificationType.CLASS) {
+      if (!data.course_class_id) {
+        throw new BadRequestException(
+          'course_class_id is required for CLASS notification type',
         );
-        break;
+      }
 
-      case NotificationType.SYSTEM:
-        const systemUsers = await this.prisma.user.findMany({
-          where: { is_active: true },
-          select: { id: true },
-        });
-        recipientUserIds = systemUsers.map((u) => u.id);
-        break;
-
-      default:
-        throw new BadRequestException(`Loại thông báo không hợp lệ`);
+      // Verify course class exists before queuing
+      const courseClass = await this.prisma.courseClass.findUnique({
+        where: { id: BigInt(data.course_class_id) },
+      });
+      if (!courseClass) {
+        throw new NotFoundException(
+          `Course class with ID ${data.course_class_id} not found`,
+        );
+      }
     }
 
-    if (recipientUserIds.length === 0) {
-      throw new BadRequestException(
-        'Không tìm thấy nhân viên để gửi thông báo',
-      );
-    }
-
-    const createdNotifications = await this.prisma.notification.createMany({
-      data: recipientUserIds.map((userId) => ({
-        user_id: userId,
-        title: data.title,
-        message: data.message,
-        notification_type: data.notification_type,
-        source_id: data.source_id ? BigInt(data.source_id) : null,
-      })),
+    // Publish to RabbitMQ queue (async)
+    await this.publisherService.publishNotificationEvent({
+      ...data,
+      senderId,
     });
 
     this.logger.log(
-      `Successfully created ${createdNotifications.count} notifications`,
+      `[Service] Notification queued for async processing: "${data.title}"`,
     );
 
+    // Return immediately with queued status
     return {
-      id: `batch-${Date.now()}`,
-      recipientCount: recipientUserIds.length,
-      message: `Đã gửi thông báo "${data.title}" tới ${recipientUserIds.length} người dùng`,
+      status: 'queued',
+      message: `Notification "${data.title}" has been queued for processing`,
     };
   }
 
