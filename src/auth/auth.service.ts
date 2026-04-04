@@ -75,7 +75,14 @@ export class AuthService {
 
     const tokens = await this.getTokens(user.id, user.username, user.role);
     await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
-    return tokens;
+    return {
+      ...tokens,
+      user: {
+        id: user.id.toString(),
+        username: user.username,
+        role: user.role,
+      }
+    };
   }
 
   async googleLogin(req) {

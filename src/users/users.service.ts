@@ -56,6 +56,42 @@ export class UsersService {
     });
   }
 
+  async getProfile(userId: string | bigint) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: typeof userId === 'string' ? BigInt(userId) : userId },
+      include: {
+        student: true,
+        lecturer: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    // Loại bỏ các trường nhạy cảm
+    const { password, refresh_token, reset_password_otp, reset_password_expires, ...safeUser } = user;
+
+    return {
+      ...safeUser,
+      id: safeUser.id.toString(),
+      student: safeUser.student
+        ? {
+            ...safeUser.student,
+            id: safeUser.student.id.toString(),
+            user_id: safeUser.student.user_id.toString(),
+          }
+        : null,
+      lecturer: safeUser.lecturer
+        ? {
+            ...safeUser.lecturer,
+            id: safeUser.lecturer.id.toString(),
+            user_id: safeUser.lecturer.user_id.toString(),
+          }
+        : null,
+    };
+  }
+
   async findByUsername(username: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { username },

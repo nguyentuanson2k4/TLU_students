@@ -1,5 +1,5 @@
 import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
@@ -14,6 +14,7 @@ import { LoginDto, ForgotPasswordDto, VerifyOtpDto, ResetPasswordDto } from './d
 export class AuthController {
   constructor(private authService: AuthService) { }
 
+  @ApiOperation({ summary: 'Đăng nhập tài khoản' })
   @ApiBody({ type: LoginDto })
   @UseGuards(LocalAuthGuard)
   @Post('login')
@@ -21,6 +22,7 @@ export class AuthController {
     return this.authService.login(req.user);
   }
 
+  @ApiOperation({ summary: 'Đăng xuất tài khoản' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout')
@@ -30,6 +32,7 @@ export class AuthController {
     return null;
   }
 
+  @ApiOperation({ summary: 'Làm mới Access Token qua Refresh Token' })
   @ApiBearerAuth()
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
@@ -39,28 +42,33 @@ export class AuthController {
     return this.authService.refreshTokens(userId, refreshToken);
   }
 
+  @ApiOperation({ summary: 'Chuyển hướng đăng nhập Google' })
   @Get('google')
   @UseGuards(GoogleOAuthGuard)
   async googleAuth(@Request() req) {
     // Logic handled by Passport Google Strategy
   }
 
+  @ApiOperation({ summary: 'Xử lý callback đăng nhập Google' })
   @Get('google/callback')
   @UseGuards(GoogleOAuthGuard)
   googleAuthRedirect(@Request() req) {
     return this.authService.googleLogin(req);
   }
 
+  @ApiOperation({ summary: 'Yêu cầu gửi mã OTP để quên mật khẩu' })
   @Post('forgot-password')
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
+  @ApiOperation({ summary: 'Xác thực mã OTP' })
   @Post('verify-otp')
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
     return this.authService.verifyOtp(verifyOtpDto.email, verifyOtpDto.otp);
   }
 
+  @ApiOperation({ summary: 'Đặt lại mật khẩu mới' })
   @Post('reset-password')
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.otp, resetPasswordDto.newPassword);

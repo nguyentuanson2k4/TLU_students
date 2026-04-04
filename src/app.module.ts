@@ -11,6 +11,8 @@ import { SemestersModule } from './semesters/semesters.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { CourseClassesModule } from './course-classes/course-classes.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { GradesModule } from './grades/grades.module';
+import { GpaHistoryModule } from './gpa-history/gpa-history.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     SubjectsModule,
     CourseClassesModule,
     NotificationsModule,
+    GradesModule,
+    GpaHistoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
