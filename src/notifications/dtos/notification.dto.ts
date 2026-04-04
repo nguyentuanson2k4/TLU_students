@@ -19,15 +19,15 @@ export class CreateNotificationDto {
   @IsString()
   @MinLength(5)
   @MaxLength(255)
-  title: string;
+  title?: string;
 
   @IsString()
   @MinLength(10)
   @MaxLength(5000)
-  message: string;
+  message?: string;
 
   @IsEnum(NotificationType)
-  notification_type: NotificationType;
+  notification_type?: NotificationType;
 
   @IsOptional()
   @IsNumber()

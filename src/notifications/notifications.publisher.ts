@@ -14,7 +14,7 @@ import { NOTIFICATION_SEND_PATTERN } from '../config/rmq.config';
 @Injectable()
 export class NotificationsPublisher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsPublisher.name);
-  private client: ClientProxy;
+  private client?: ClientProxy;
   private isConnected = false;
 
   async onModuleInit() {
@@ -71,7 +71,7 @@ export class NotificationsPublisher implements OnModuleInit, OnModuleDestroy {
       );
 
       // Fire-and-forget pattern - doesn't wait for response
-      this.client.emit(NOTIFICATION_SEND_PATTERN, payload);
+      this.client?.emit(NOTIFICATION_SEND_PATTERN, payload);
 
       this.logger.debug(
         `[Publisher] Event published successfully for: ${payload.title}`,
