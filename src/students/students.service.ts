@@ -201,6 +201,83 @@ export class StudentsService {
     };
   }
 
+  async getMySchedule(userId: bigint, semesterId?: bigint): Promise<any> {
+    const student = await this.prisma.student.findUnique({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Không tìm thấy hồ sơ sinh viên.');
+    }
+
+    return this.getClassesForStudent(student.id, semesterId);
+  }
+
+  async getScheduleByCode(code: string, semesterId?: bigint): Promise<any> {
+    const student = await this.prisma.student.findUnique({
+      where: { student_code: code },
+      select: { id: true },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Không tìm thấy sinh viên với mã ${code}`);
+    }
+
+    return this.getClassesForStudent(student.id, semesterId);
+  }
+
+  private async getClassesForStudent(studentId: bigint, semesterId?: bigint): Promise<any[]> {
+    const whereClause: any = {
+      enrollments: {
+        some: {
+          student_id: studentId,
+        },
+      },
+    };
+
+    if (semesterId) {
+      whereClause.semester_id = semesterId;
+    }
+
+    const schedules = await this.prisma.courseClass.findMany({
+      where: whereClause,
+      include: {
+        subject: {
+          select: {
+            subject_code: true,
+            subject_name: true,
+            credits: true,
+          },
+        },
+        lecturer: {
+          select: {
+            full_name: true,
+            email: true,
+          },
+        },
+        semester: {
+          select: {
+            semester_name: true,
+            academic_year: true,
+          },
+        },
+      },
+      orderBy: [
+        { start_date: 'asc' },
+        { day_of_week: 'asc' },
+      ],
+    });
+
+    return schedules.map((cls) => ({
+      ...cls,
+      id: cls.id.toString(),
+      subject_id: cls.subject_id.toString(),
+      lecturer_id: cls.lecturer_id.toString(),
+      semester_id: cls.semester_id.toString(),
+    }));
+  }
+
   async remove(code: string): Promise<any> {
     const student = await this.prisma.student.findUnique({
       where: { student_code: code },
