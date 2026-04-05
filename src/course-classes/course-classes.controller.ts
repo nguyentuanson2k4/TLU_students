@@ -21,6 +21,13 @@ export class CourseClassesController {
     return this.courseClassesService.create(createCourseClassDto);
   }
 
+  @Post('bulk')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Tạo nhiều lớp học phần mới (Admin)' })
+  createMany(@Body() createCourseClassDtos: CreateCourseClassDto[]) {
+    return this.courseClassesService.createMany(createCourseClassDtos);
+  }
+
   @Get()
   @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   @ApiOperation({ summary: 'Lấy danh sách tất cả lớp học phần' })

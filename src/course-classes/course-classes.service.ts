@@ -22,6 +22,23 @@ export class CourseClassesService {
     });
   }
 
+  async createMany(createCourseClassDtos: CreateCourseClassDto[]) {
+    const data = createCourseClassDtos.map((dto) => ({
+      ...dto,
+      subject_id: BigInt(dto.subject_id),
+      lecturer_id: BigInt(dto.lecturer_id),
+      semester_id: BigInt(dto.semester_id),
+      start_date: new Date(dto.start_date),
+      end_date: new Date(dto.end_date),
+      current_students: 0,
+    }));
+
+    return this.prisma.courseClass.createMany({
+      data,
+      skipDuplicates: true,
+    });
+  }
+
   findAll() {
     return this.prisma.courseClass.findMany({
       include: {

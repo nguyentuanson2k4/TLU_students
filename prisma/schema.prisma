@@ -166,7 +166,6 @@ model CourseClass {
   semester_id      BigInt
   academic_year    String   @db.VarChar(20)
   room             String?  @db.VarChar(50)
-  schedule         String?  @db.VarChar(255)
   max_students     Int?
   current_students Int?
   day_of_week      Int      @db.SmallInt
