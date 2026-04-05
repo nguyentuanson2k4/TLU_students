@@ -3,7 +3,6 @@ import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { rmqConfig } from './config/rmq.config';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
