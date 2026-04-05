@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, UseInterceptors, UploadedFile } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StudentsService } from './students.service';
 import { Role } from '@prisma/client';
@@ -55,6 +55,25 @@ export class StudentsController {
   updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateStudentProfileDto) {
     const userId = typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
     return this.studentsService.updateProfile(userId, updateProfileDto);
+  }
+
+  @Get('me/schedule')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Sinh viên xem thời khóa biểu của mình' })
+  @ApiQuery({ name: 'semester_id', required: false, type: String, description: 'ID kỳ học' })
+  getMySchedule(@Req() req: any, @Query('semester_id') semesterId?: string) {
+    const userId = typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
+    const parsedSemesterId = semesterId ? BigInt(semesterId) : undefined;
+    return this.studentsService.getMySchedule(userId, parsedSemesterId);
+  }
+
+  @Get(':code/schedule')
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @ApiOperation({ summary: 'Xem thời khóa biểu của sinh viên theo mã SV (Admin, Lecturer)' })
+  @ApiQuery({ name: 'semester_id', required: false, type: String, description: 'ID kỳ học' })
+  getStudentSchedule(@Param('code') code: string, @Query('semester_id') semesterId?: string) {
+    const parsedSemesterId = semesterId ? BigInt(semesterId) : undefined;
+    return this.studentsService.getScheduleByCode(code, parsedSemesterId);
   }
 
   @Get(':code')
