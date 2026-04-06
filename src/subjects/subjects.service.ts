@@ -18,6 +18,13 @@ export class SubjectsService {
     });
   }
 
+  async createMany(createSubjectDtos: CreateSubjectDto[]) {
+    return this.prisma.subject.createMany({
+      data: createSubjectDtos,
+      skipDuplicates: true,
+    });
+  }
+
   findAll() {
     return this.prisma.subject.findMany({
       orderBy: { subject_code: 'asc' }

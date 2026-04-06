@@ -13,6 +13,7 @@ import { CourseClassesModule } from './course-classes/course-classes.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GradesModule } from './grades/grades.module';
 import { GpaHistoryModule } from './gpa-history/gpa-history.module';
+import { ClassEnrollmentsModule } from './class-enrollments/class-enrollments.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { GpaHistoryModule } from './gpa-history/gpa-history.module';
     NotificationsModule,
     GradesModule,
     GpaHistoryModule,
+    ClassEnrollmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

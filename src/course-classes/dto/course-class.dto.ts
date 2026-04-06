@@ -2,17 +2,21 @@ import { IsString, IsNotEmpty, MaxLength, IsInt, Min, IsOptional, IsDateString, 
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class CreateCourseClassDto {
-  @ApiProperty({ description: 'ID môn học', type: String })
+  @ApiProperty({ description: 'ID môn học', type: Number })
   @IsNotEmpty()
-  subject_id: string | number;
+  @IsInt()
+  subject_id: number;
 
-  @ApiProperty({ description: 'ID giảng viên', type: String })
+  @ApiProperty({ description: 'ID giảng viên', type: Number })
   @IsNotEmpty()
-  lecturer_id: string | number;
+  @IsInt()
+  lecturer_id: number;
 
-  @ApiProperty({ description: 'ID học kỳ', type: String })
+  @ApiProperty({ description: 'ID học kỳ', type: Number })
   @IsNotEmpty()
-  semester_id: string | number;
+  @IsInt()
+  semester_id: number;
+
 
   @ApiProperty({ description: 'Năm học (VD: 2023-2024)', example: '2023-2024' })
   @IsString()
@@ -25,12 +29,6 @@ export class CreateCourseClassDto {
   @IsString()
   @MaxLength(50)
   room?: string;
-
-  @ApiProperty({ description: 'Lịch học chi tiết', required: false })
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  schedule?: string;
 
   @ApiProperty({ description: 'Số lượng sinh viên tối đa', example: 60, required: false })
   @IsOptional()

@@ -21,6 +21,13 @@ export class SemestersController {
     return this.semestersService.create(createSemesterDto);
   }
 
+  @Post('bulk')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Tạo nhiều học kỳ mới (Admin)' })
+  createMany(@Body() createSemesterDtos: CreateSemesterDto[]) {
+    return this.semestersService.createMany(createSemesterDtos);
+  }
+
   @Get()
   @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   @ApiOperation({ summary: 'Lấy danh sách tất cả học kỳ' })

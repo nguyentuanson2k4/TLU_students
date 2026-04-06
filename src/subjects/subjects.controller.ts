@@ -21,6 +21,13 @@ export class SubjectsController {
     return this.subjectsService.create(createSubjectDto);
   }
 
+  @Post('bulk')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Tạo nhiều môn học mới (Admin)' })
+  createMany(@Body() createSubjectDtos: CreateSubjectDto[]) {
+    return this.subjectsService.createMany(createSubjectDtos);
+  }
+
   @Get()
   @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   @ApiOperation({ summary: 'Lấy danh sách tất cả môn học' })

@@ -68,8 +68,8 @@ export class StudentsService {
       });
 
       return {
-        id: student.id.toString(),
-        user_id: newUser.id.toString(),
+        id: student.id,
+        user_id: newUser.id,
         student_code: student.student_code,
         full_name: student.full_name,
         email: student.email,
@@ -94,17 +94,7 @@ export class StudentsService {
       },
     });
 
-    return students.map((s) => ({
-      ...s,
-      id: s.id.toString(),
-      user_id: s.user_id.toString(),
-      user: s.user
-        ? {
-            ...s.user,
-            id: s.user.id.toString(),
-          }
-        : null,
-    }));
+    return students;
   }
 
   async findByCode(code: string): Promise<any> {
@@ -127,17 +117,7 @@ export class StudentsService {
       throw new NotFoundException(`Không tìm thấy sinh viên với mã ${code}`);
     }
 
-    return {
-      ...student,
-      id: student.id.toString(),
-      user_id: student.user_id.toString(),
-      user: student.user
-        ? {
-            ...student.user,
-            id: student.user.id.toString(),
-          }
-        : null,
-    };
+    return student;
   }
 
   async update(code: string, data: UpdateStudentDto): Promise<any> {
@@ -159,11 +139,7 @@ export class StudentsService {
       data: updateData,
     });
 
-    return {
-      ...updated,
-      id: updated.id.toString(),
-      user_id: updated.user_id.toString(),
-    };
+    return updated;
   }
 
   async updateProfile(userId: bigint, data: UpdateStudentProfileDto): Promise<any> {
@@ -194,11 +170,7 @@ export class StudentsService {
       },
     });
 
-    return {
-      ...updated,
-      id: updated.id.toString(),
-      user_id: updated.user_id.toString(),
-    };
+    return updated;
   }
 
   async getMySchedule(userId: bigint, semesterId?: bigint): Promise<any> {
@@ -269,13 +241,7 @@ export class StudentsService {
       ],
     });
 
-    return schedules.map((cls) => ({
-      ...cls,
-      id: cls.id.toString(),
-      subject_id: cls.subject_id.toString(),
-      lecturer_id: cls.lecturer_id.toString(),
-      semester_id: cls.semester_id.toString(),
-    }));
+    return schedules;
   }
 
   async remove(code: string): Promise<any> {
@@ -299,7 +265,7 @@ export class StudentsService {
 
       return {
         message: `Đã xóa sinh viên ${code} và tài khoản liên kết.`,
-        user_id: deletedUser.id.toString(),
+        user_id: deletedUser.id,
       };
     });
   }
