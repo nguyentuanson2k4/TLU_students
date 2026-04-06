@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Express } from 'express';
 import { StudentsService } from './students.service';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateStudentDto, UpdateStudentDto, UpdateStudentProfileDto } from './dto/student.dto';
+
+// Type for file upload - using any due to Express.Multer.File type compatibility
+type UploadFile = any;
 
 @ApiTags('Students')
 @ApiBearerAuth()
@@ -35,7 +39,7 @@ export class StudentsController {
       },
     },
   })
-  async importExcel(@UploadedFile() file: Express.Multer.File) {
+  async importExcel(@UploadedFile() file: UploadFile) {
     if (!file) {
       throw new Error('Vui lòng upload file Excel.');
     }

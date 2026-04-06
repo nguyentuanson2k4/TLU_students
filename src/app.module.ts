@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -17,9 +18,11 @@ import { ClassEnrollmentsModule } from './class-enrollments/class-enrollments.mo
 import { DocumentTypesModule } from './document-types/document-types.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { AttendanceWarningModule } from './attendance-warning/attendance-warning.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PrismaModule,
     UsersModule,
     AuthModule,
@@ -36,6 +39,7 @@ import { UploadsModule } from './uploads/uploads.module';
     DocumentTypesModule,
     ServiceRequestsModule,
     UploadsModule,
+    AttendanceWarningModule,
   ],
   controllers: [AppController],
   providers: [AppService],
