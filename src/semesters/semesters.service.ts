@@ -21,6 +21,13 @@ export class SemestersService {
     });
   }
 
+  async createMany(createSemesterDtos: CreateSemesterDto[]) {
+    return this.prisma.semester.createMany({
+      data: createSemesterDtos,
+      skipDuplicates: true,
+    });
+  }
+
   findAll() {
     return this.prisma.semester.findMany({
       orderBy: [
