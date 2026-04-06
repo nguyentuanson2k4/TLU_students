@@ -14,6 +14,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { GradesModule } from './grades/grades.module';
 import { GpaHistoryModule } from './gpa-history/gpa-history.module';
 import { ClassEnrollmentsModule } from './class-enrollments/class-enrollments.module';
+import { DocumentTypesModule } from './document-types/document-types.module';
+import { ServiceRequestsModule } from './service-requests/service-requests.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -30,6 +33,9 @@ import { ClassEnrollmentsModule } from './class-enrollments/class-enrollments.mo
     GradesModule,
     GpaHistoryModule,
     ClassEnrollmentsModule,
+    DocumentTypesModule,
+    ServiceRequestsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

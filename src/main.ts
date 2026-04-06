@@ -3,6 +3,9 @@ import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
+import * as path from 'path';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -14,6 +17,18 @@ async function bootstrap() {
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Apply global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+
+  // Serve static files from uploads directory
+  const uploadPath = path.join(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadPath));
 
   const config = new DocumentBuilder()
     .setTitle('API Documentation')
