@@ -1,6 +1,6 @@
 /**
  * Attendance Warning Constants
- * 
+ *
  * Defines thresholds for student attendance warning levels
  * Used throughout the application to determine severity of absence
  */

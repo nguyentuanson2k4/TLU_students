@@ -21,7 +21,10 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { AttendanceWarningService } from './attendance-warning.service';
-import { QueryAttendanceWarningDto, ResolveWarningDto } from './dto/attendance-warning-query.dto';
+import {
+  QueryAttendanceWarningDto,
+  ResolveWarningDto,
+} from './dto/attendance-warning-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -39,7 +42,8 @@ export class AttendanceWarningController {
   @Roles('ADMIN')
   @ApiOperation({
     summary: 'List all attendance warnings',
-    description: 'Admin endpoint to retrieve all attendance warnings with optional filters and pagination. Supports filtering by severity, student code, and resolution status.',
+    description:
+      'Admin endpoint to retrieve all attendance warnings with optional filters and pagination. Supports filtering by severity, student code, and resolution status.',
   })
   @ApiQuery({
     name: 'page',
@@ -114,7 +118,8 @@ export class AttendanceWarningController {
 
       const filters: any = {};
       if (query.severity) filters.severity = query.severity;
-      if (query.is_resolved !== undefined) filters.is_resolved = query.is_resolved;
+      if (query.is_resolved !== undefined)
+        filters.is_resolved = query.is_resolved;
       if (query.student_code) filters.student_code = query.student_code;
 
       const result = await this.attendanceWarningService.getAllWarnings(
@@ -150,7 +155,8 @@ export class AttendanceWarningController {
   })
   @ApiOperation({
     summary: 'Get warning details by ID',
-    description: 'Admin endpoint to retrieve detailed information about a specific warning by its ID',
+    description:
+      'Admin endpoint to retrieve detailed information about a specific warning by its ID',
   })
   @ApiResponse({
     status: 200,
@@ -207,7 +213,10 @@ export class AttendanceWarningController {
         data: warning,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new BadRequestException(
@@ -232,7 +241,8 @@ export class AttendanceWarningController {
   })
   @ApiOperation({
     summary: 'Resolve an attendance warning',
-    description: 'Admin endpoint to mark a warning as resolved. If already resolved, returns appropriate message.',
+    description:
+      'Admin endpoint to mark a warning as resolved. If already resolved, returns appropriate message.',
   })
   @ApiResponse({
     status: 200,
@@ -327,7 +337,8 @@ export class AttendanceWarningController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Get my attendance warnings',
-    description: 'Student endpoint to retrieve their own attendance warnings with pagination',
+    description:
+      'Student endpoint to retrieve their own attendance warnings with pagination',
   })
   @ApiQuery({
     name: 'page',
@@ -379,7 +390,7 @@ export class AttendanceWarningController {
   ) {
     try {
       const userId = req.user?.id || req.user?.userId;
-      
+
       if (!userId) {
         throw new ForbiddenException('User information not found');
       }
@@ -403,7 +414,9 @@ export class AttendanceWarningController {
         throw error;
       }
       throw new BadRequestException(
-        error instanceof Error ? error.message : 'Failed to retrieve your warnings',
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve your warnings',
       );
     }
   }

@@ -1,5 +1,25 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Req,
+  UseInterceptors,
+  UploadedFile,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
 import { StudentsService } from './students.service';
@@ -7,7 +27,11 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { CreateStudentDto, UpdateStudentDto, UpdateStudentProfileDto } from './dto/student.dto';
+import {
+  CreateStudentDto,
+  UpdateStudentDto,
+  UpdateStudentProfileDto,
+} from './dto/student.dto';
 
 // Type for file upload - using any due to Express.Multer.File type compatibility
 type UploadFile = any;
@@ -35,7 +59,11 @@ export class StudentsController {
     schema: {
       type: 'object',
       properties: {
-        file: { type: 'string', format: 'binary', description: 'File Excel (.xlsx)' },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File Excel (.xlsx)',
+        },
       },
     },
   })
@@ -56,33 +84,55 @@ export class StudentsController {
   @Patch('profile/me')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Sinh viên tự cập nhật thông tin cá nhân' })
-  updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateStudentProfileDto) {
-    const userId = typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
+  updateProfile(
+    @Req() req: any,
+    @Body() updateProfileDto: UpdateStudentProfileDto,
+  ) {
+    const userId =
+      typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
     return this.studentsService.updateProfile(userId, updateProfileDto);
   }
 
   @Get('me/schedule')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Sinh viên xem thời khóa biểu của mình' })
-  @ApiQuery({ name: 'semester_id', required: false, type: String, description: 'ID kỳ học' })
+  @ApiQuery({
+    name: 'semester_id',
+    required: false,
+    type: String,
+    description: 'ID kỳ học',
+  })
   getMySchedule(@Req() req: any, @Query('semester_id') semesterId?: string) {
-    const userId = typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
+    const userId =
+      typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
     const parsedSemesterId = semesterId ? BigInt(semesterId) : undefined;
     return this.studentsService.getMySchedule(userId, parsedSemesterId);
   }
 
   @Get(':code/schedule')
   @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({ summary: 'Xem thời khóa biểu của sinh viên theo mã SV (Admin, Lecturer)' })
-  @ApiQuery({ name: 'semester_id', required: false, type: String, description: 'ID kỳ học' })
-  getStudentSchedule(@Param('code') code: string, @Query('semester_id') semesterId?: string) {
+  @ApiOperation({
+    summary: 'Xem thời khóa biểu của sinh viên theo mã SV (Admin, Lecturer)',
+  })
+  @ApiQuery({
+    name: 'semester_id',
+    required: false,
+    type: String,
+    description: 'ID kỳ học',
+  })
+  getStudentSchedule(
+    @Param('code') code: string,
+    @Query('semester_id') semesterId?: string,
+  ) {
     const parsedSemesterId = semesterId ? BigInt(semesterId) : undefined;
     return this.studentsService.getScheduleByCode(code, parsedSemesterId);
   }
 
   @Get(':code')
   @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({ summary: 'Lấy thông tin sinh viên theo mã SV (Admin, Lecturer)' })
+  @ApiOperation({
+    summary: 'Lấy thông tin sinh viên theo mã SV (Admin, Lecturer)',
+  })
   findByCode(@Param('code') code: string) {
     return this.studentsService.findByCode(code);
   }
@@ -90,7 +140,10 @@ export class StudentsController {
   @Patch(':code')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Cập nhật thông tin sinh viên theo mã SV (Admin)' })
-  update(@Param('code') code: string, @Body() updateStudentDto: UpdateStudentDto) {
+  update(
+    @Param('code') code: string,
+    @Body() updateStudentDto: UpdateStudentDto,
+  ) {
     return this.studentsService.update(code, updateStudentDto);
   }
 

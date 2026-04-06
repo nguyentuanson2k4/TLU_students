@@ -35,9 +35,7 @@ export class AttendanceWarningService {
     }
 
     if (absentSessions > totalSessions) {
-      throw new Error(
-        'Absent sessions cannot exceed total sessions',
-      );
+      throw new Error('Absent sessions cannot exceed total sessions');
     }
 
     const absencePercentage = (absentSessions / totalSessions) * 100;
@@ -229,7 +227,9 @@ export class AttendanceWarningService {
       const absencePercentage = (absentSessions / totalSessions) * 100;
 
       // Determine severity
-      const severity = getWarningSeverity(absencePercentage) as WarningSeverity | null;
+      const severity = getWarningSeverity(
+        absencePercentage,
+      ) as WarningSeverity | null;
 
       // If no warning needed, return early
       if (!severity) {
@@ -323,7 +323,10 @@ export class AttendanceWarningService {
         );
         results.push(result);
       } catch (error) {
-        this.logger.error(`Failed to generate warning for user ${warning.userId}:`, error);
+        this.logger.error(
+          `Failed to generate warning for user ${warning.userId}:`,
+          error,
+        );
         // Continue processing other warnings
       }
     }
@@ -390,11 +393,10 @@ export class AttendanceWarningService {
       // Filter by student_code if provided
       let filteredWarnings = warnings;
       if (filters?.student_code) {
-        filteredWarnings = warnings.filter(
-          (w) =>
-            w.user.student?.student_code
-              ?.toLowerCase()
-              .includes(filters?.student_code?.toLowerCase() || ''),
+        filteredWarnings = warnings.filter((w) =>
+          w.user.student?.student_code
+            ?.toLowerCase()
+            .includes(filters?.student_code?.toLowerCase() || ''),
         );
       }
 
@@ -483,10 +485,7 @@ export class AttendanceWarningService {
    *   'Sinh viên đã cải thiện tham dự'
    * );
    */
-  async resolveWarning(
-    warningId: bigint | number,
-    resolutionNote?: string,
-  ) {
+  async resolveWarning(warningId: bigint | number, resolutionNote?: string) {
     try {
       // First, get the current warning to check its status
       const currentWarning = await this.prisma.warningLog.findUnique({
