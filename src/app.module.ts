@@ -19,6 +19,8 @@ import { DocumentTypesModule } from './document-types/document-types.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AttendanceWarningModule } from './attendance-warning/attendance-warning.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { FaceRecognitionModule } from './face-recognition/face-recognition.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AttendanceWarningModule } from './attendance-warning/attendance-warning
     ServiceRequestsModule,
     UploadsModule,
     AttendanceWarningModule,
+    AttendanceModule,
+    FaceRecognitionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

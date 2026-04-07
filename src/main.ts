@@ -14,6 +14,8 @@ import * as path from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors();
+
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
   app.useGlobalFilters(new HttpExceptionFilter());
