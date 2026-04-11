@@ -49,15 +49,15 @@ enum WarningSeverity {
 // ===================== CORE USER MODELS =====================
 
 model User {
-  id        BigInt   @id @default(autoincrement())
-  username  String   @unique @db.VarChar(255)
-  password  String   @db.VarChar(255)
-  role      Role     @default(STUDENT)
-  is_active Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  refresh_token String? @db.VarChar(255)
-  reset_password_otp     String?  @db.VarChar(10)
+  id                     BigInt    @id @default(autoincrement())
+  username               String    @unique @db.VarChar(255)
+  password               String    @db.VarChar(255)
+  role                   Role      @default(STUDENT)
+  is_active              Boolean   @default(true)
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  refresh_token          String?   @db.VarChar(255)
+  reset_password_otp     String?   @db.VarChar(10)
   reset_password_expires DateTime?
 
   student  Student?
@@ -79,27 +79,26 @@ model User {
 }
 
 model Student {
-  id                 BigInt   @id @default(autoincrement())
-  user_id            BigInt   @unique
-  student_code       String   @unique @db.VarChar(50)
-  full_name          String   @db.VarChar(255)
-  dob                DateTime
-  gender             Gender
-  phone_number       String   @db.VarChar(20)
-  class_name         String   @db.VarChar(50)
-  address            String?  @db.VarChar(255)
-  gpa                Decimal? @db.Decimal(3, 2)
-  email              String   @unique @db.VarChar(255)
-  major_name         String?  @db.VarChar(255)
-  department_name    String?  @db.VarChar(255)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  id              BigInt   @id @default(autoincrement())
+  user_id         BigInt   @unique
+  student_code    String   @unique @db.VarChar(50)
+  full_name       String   @db.VarChar(255)
+  dob             DateTime
+  gender          Gender
+  phone_number    String   @db.VarChar(20)
+  class_name      String   @db.VarChar(50)
+  address         String?  @db.VarChar(255)
+  gpa             Decimal? @db.Decimal(3, 2)
+  email           String   @unique @db.VarChar(255)
+  major_name      String?  @db.VarChar(255)
+  department_name String?  @db.VarChar(255)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   user User @relation(fields: [user_id], references: [id])
 
   // Reverse relations
   enrollments       ClassEnrollment[]
-  grades            Grade[]
   gpaHistories      GpaHistory[]
   attendanceRecords AttendanceRecord[]
   tuitionFees       TuitionFee[]
@@ -132,15 +131,15 @@ model Lecturer {
 // ===================== ACADEMIC MODELS =====================
 
 model Subject {
-  id           BigInt @id @default(autoincrement())
-  subject_code String @unique @db.VarChar(50)
-  subject_name String @db.VarChar(255)
+  id           BigInt  @id @default(autoincrement())
+  subject_code String  @unique @db.VarChar(50)
+  subject_name String  @db.VarChar(255)
   credits      Int
   description  String? @db.VarChar(255)
 
   // Reverse relations
   courseClasses CourseClass[]
-  posts        Post[]
+  posts         Post[]
 
   @@map("subjects")
 }
@@ -152,8 +151,8 @@ model Semester {
 
   // Reverse relations
   courseClasses CourseClass[]
-  gpaHistories GpaHistory[]
-  tuitionFees  TuitionFee[]
+  gpaHistories  GpaHistory[]
+  tuitionFees   TuitionFee[]
 
   @@map("semesters")
 }
@@ -180,7 +179,6 @@ model CourseClass {
 
   // Reverse relations
   enrollments        ClassEnrollment[]
-  grades             Grade[]
   attendanceSessions AttendanceSession[]
   posts              Post[]
 
@@ -209,8 +207,6 @@ model ClassEnrollment {
 
 model Grade {
   id               BigInt   @id @default(autoincrement())
-  student_id       BigInt
-  course_class_id  BigInt
   enrollment_id    BigInt
   score_attendance Decimal  @default(0) @db.Decimal(4, 2)
   score_process    Decimal  @default(0) @db.Decimal(4, 2)
@@ -218,12 +214,8 @@ model Grade {
   score_total_10   Decimal  @default(0.00) @db.Decimal(4, 2)
   updated_at       DateTime @updatedAt
 
-  student      Student         @relation(fields: [student_id], references: [id])
-  course_class CourseClass     @relation(fields: [course_class_id], references: [id])
-  enrollment   ClassEnrollment @relation(fields: [enrollment_id], references: [id])
+  enrollment ClassEnrollment @relation(fields: [enrollment_id], references: [id])
 
-  @@index([student_id])
-  @@index([course_class_id])
   @@index([enrollment_id])
   @@map("grades")
 }
@@ -248,11 +240,11 @@ model GpaHistory {
 // ===================== FACE RECOGNITION MODELS =====================
 
 model StudentFace {
-  id               BigInt   @id @default(autoincrement())
+  id               BigInt                      @id @default(autoincrement())
   student_id       BigInt
-  image_url        String   @db.VarChar(500)
+  image_url        String                      @db.VarChar(500)
   embedding_vector Unsupported("vector(512)")?
-  created_at       DateTime @default(now())
+  created_at       DateTime                    @default(now())
 
   student Student @relation(fields: [student_id], references: [id])
 
@@ -329,8 +321,8 @@ model ChatMessage {
   session ChatSession @relation(fields: [session_id], references: [id])
 
   // Reverse relations
-  entities  ChatEntity[]
-  analyses  ChatHistoryAnalysis[]
+  entities ChatEntity[]
+  analyses ChatHistoryAnalysis[]
 
   @@index([session_id])
   @@map("chat_messages")

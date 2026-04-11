@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGradeDto, UpdateGradeDto } from './dto/grade.dto';
 
 @Injectable()
 export class GradesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   /**
    * Tính điểm tổng kết hệ 10
@@ -18,27 +22,25 @@ export class GradesService {
     return {
       ...grade,
       id: grade.id.toString(),
-      student_id: grade.student_id.toString(),
-      course_class_id: grade.course_class_id.toString(),
       enrollment_id: grade.enrollment_id.toString(),
       score_attendance: Number(grade.score_attendance),
       score_process: Number(grade.score_process),
       score_final: Number(grade.score_final),
       score_total_10: Number(grade.score_total_10),
-      student: grade.student
+      student: grade.enrollment?.student
         ? {
-            ...grade.student,
-            id: grade.student.id.toString(),
-            user_id: grade.student.user_id.toString(),
+            ...grade.enrollment.student,
+            id: grade.enrollment.student.id.toString(),
+            user_id: grade.enrollment.student.user_id.toString(),
           }
         : undefined,
-      course_class: grade.course_class
+      course_class: grade.enrollment?.course_class
         ? {
-            ...grade.course_class,
-            id: grade.course_class.id.toString(),
-            subject_id: grade.course_class.subject_id.toString(),
-            lecturer_id: grade.course_class.lecturer_id.toString(),
-            semester_id: grade.course_class.semester_id.toString(),
+            ...grade.enrollment.course_class,
+            id: grade.enrollment.course_class.id.toString(),
+            subject_id: grade.enrollment.course_class.subject_id.toString(),
+            lecturer_id: grade.enrollment.course_class.lecturer_id.toString(),
+            semester_id: grade.enrollment.course_class.semester_id.toString(),
           }
         : undefined,
       enrollment: grade.enrollment
@@ -53,14 +55,21 @@ export class GradesService {
   }
 
   async create(data: CreateGradeDto) {
+    const enrollmentId = BigInt(data.enrollment_id);
+
+    const enrollment = await this.prisma.classEnrollment.findUnique({
+      where: { id: enrollmentId },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Không tìm thấy thông tin đăng ký học phần.');
+    }
+
     // Kiểm tra đã có điểm cho enrollment này chưa
     const existing = await this.prisma.grade.findFirst({
-      where: {
-        student_id: BigInt(data.student_id),
-        course_class_id: BigInt(data.course_class_id),
-        enrollment_id: BigInt(data.enrollment_id),
-      },
+      where: { enrollment_id: enrollmentId },
     });
+
     if (existing) {
       throw new ConflictException('Điểm đã tồn tại cho sinh viên trong lớp học phần này.');
     }
@@ -72,19 +81,23 @@ export class GradesService {
 
     const grade = await this.prisma.grade.create({
       data: {
-        student_id: BigInt(data.student_id),
-        course_class_id: BigInt(data.course_class_id),
-        enrollment_id: BigInt(data.enrollment_id),
+        enrollment_id: enrollmentId,
         score_attendance: attendance,
         score_process: process,
         score_final: finalScore,
         score_total_10: total,
       },
       include: {
-        student: true,
-        course_class: { include: { subject: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true } },
+          },
+        },
       },
     });
+
+    this.eventEmitter.emit('grade.updated', { studentId: enrollment.student_id });
 
     return this.serializeGrade(grade);
   }
@@ -92,8 +105,12 @@ export class GradesService {
   async findAll() {
     const grades = await this.prisma.grade.findMany({
       include: {
-        student: true,
-        course_class: { include: { subject: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true } },
+          },
+        },
       },
     });
 
@@ -104,8 +121,12 @@ export class GradesService {
     const grade = await this.prisma.grade.findUnique({
       where: { id: BigInt(id) },
       include: {
-        student: true,
-        course_class: { include: { subject: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true } },
+          },
+        },
       },
     });
 
@@ -118,9 +139,18 @@ export class GradesService {
 
   async findByStudent(studentId: string) {
     const grades = await this.prisma.grade.findMany({
-      where: { student_id: BigInt(studentId) },
+      where: {
+        enrollment: {
+          student_id: BigInt(studentId),
+        },
+      },
       include: {
-        course_class: { include: { subject: true, semester: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true, semester: true } },
+          },
+        },
       },
     });
 
@@ -129,9 +159,18 @@ export class GradesService {
 
   async findByCourseClass(courseClassId: string) {
     const grades = await this.prisma.grade.findMany({
-      where: { course_class_id: BigInt(courseClassId) },
+      where: {
+        enrollment: {
+          course_class_id: BigInt(courseClassId),
+        },
+      },
       include: {
-        student: true,
+        enrollment: {
+          include: {
+            student: true,
+            course_class: true,
+          },
+        },
       },
     });
 
@@ -151,9 +190,18 @@ export class GradesService {
     }
 
     const grades = await this.prisma.grade.findMany({
-      where: { student_id: student.id },
+      where: {
+        enrollment: {
+          student_id: student.id,
+        },
+      },
       include: {
-        course_class: { include: { subject: true, semester: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true, semester: true } },
+          },
+        },
       },
     });
 
@@ -163,6 +211,7 @@ export class GradesService {
   async update(id: string, data: UpdateGradeDto) {
     const existing = await this.prisma.grade.findUnique({
       where: { id: BigInt(id) },
+      include: { enrollment: true },
     });
 
     if (!existing) {
@@ -184,10 +233,16 @@ export class GradesService {
       where: { id: BigInt(id) },
       data: updateData,
       include: {
-        student: true,
-        course_class: { include: { subject: true } },
+        enrollment: {
+          include: {
+            student: true,
+            course_class: { include: { subject: true } },
+          },
+        },
       },
     });
+
+    this.eventEmitter.emit('grade.updated', { studentId: existing.enrollment.student_id });
 
     return this.serializeGrade(grade);
   }
@@ -195,6 +250,7 @@ export class GradesService {
   async remove(id: string) {
     const existing = await this.prisma.grade.findUnique({
       where: { id: BigInt(id) },
+      include: { enrollment: true },
     });
 
     if (!existing) {
@@ -204,6 +260,8 @@ export class GradesService {
     await this.prisma.grade.delete({
       where: { id: BigInt(id) },
     });
+
+    this.eventEmitter.emit('grade.updated', { studentId: existing.enrollment.student_id });
 
     return { message: `Đã xóa điểm với ID ${id}` };
   }

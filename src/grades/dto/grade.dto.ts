@@ -2,15 +2,6 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
 
 export class CreateGradeDto {
-  @ApiProperty({ description: 'ID của sinh viên', example: '1' })
-  @IsNotEmpty()
-  @IsString()
-  student_id: string;
-
-  @ApiProperty({ description: 'ID của lớp học phần', example: '1' })
-  @IsNotEmpty()
-  @IsString()
-  course_class_id: string;
 
   @ApiProperty({ description: 'ID của đăng ký lớp', example: '1' })
   @IsNotEmpty()

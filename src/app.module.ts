@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -13,7 +14,6 @@ import { SubjectsModule } from './subjects/subjects.module';
 import { CourseClassesModule } from './course-classes/course-classes.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GradesModule } from './grades/grades.module';
-import { GpaHistoryModule } from './gpa-history/gpa-history.module';
 import { ClassEnrollmentsModule } from './class-enrollments/class-enrollments.module';
 import { DocumentTypesModule } from './document-types/document-types.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
@@ -24,6 +24,7 @@ import { FaceRecognitionModule } from './face-recognition/face-recognition.modul
 
 @Module({
   imports: [
+    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     PrismaModule,
     UsersModule,
@@ -36,7 +37,6 @@ import { FaceRecognitionModule } from './face-recognition/face-recognition.modul
     CourseClassesModule,
     NotificationsModule,
     GradesModule,
-    GpaHistoryModule,
     ClassEnrollmentsModule,
     DocumentTypesModule,
     ServiceRequestsModule,

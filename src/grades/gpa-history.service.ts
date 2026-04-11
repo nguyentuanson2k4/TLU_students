@@ -1,6 +1,5 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateGpaHistoryDto, UpdateGpaHistoryDto } from './dto/gpa-history.dto';
 
 @Injectable()
 export class GpaHistoryService {
@@ -28,37 +27,6 @@ export class GpaHistoryService {
           }
         : undefined,
     };
-  }
-
-  async create(data: CreateGpaHistoryDto) {
-    // Kiểm tra đã có GPA cho student + semester này chưa (unique constraint)
-    const existing = await this.prisma.gpaHistory.findUnique({
-      where: {
-        student_id_semester_id: {
-          student_id: BigInt(data.student_id),
-          semester_id: BigInt(data.semester_id),
-        },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException('GPA đã tồn tại cho sinh viên trong học kỳ này.');
-    }
-
-    const record = await this.prisma.gpaHistory.create({
-      data: {
-        student_id: BigInt(data.student_id),
-        semester_id: BigInt(data.semester_id),
-        gpa_semester: data.gpa_semester ?? 0,
-        gpa_cumulative: data.gpa_cumulative ?? 0,
-      },
-      include: {
-        student: true,
-        semester: true,
-      },
-    });
-
-    return this.serializeGpaHistory(record);
   }
 
   async findAll() {
@@ -127,46 +95,5 @@ export class GpaHistoryService {
     });
 
     return records.map((r) => this.serializeGpaHistory(r));
-  }
-
-  async update(id: string, data: UpdateGpaHistoryDto) {
-    const existing = await this.prisma.gpaHistory.findUnique({
-      where: { id: BigInt(id) },
-    });
-
-    if (!existing) {
-      throw new NotFoundException(`Không tìm thấy lịch sử GPA với ID ${id}`);
-    }
-
-    const updateData: any = {};
-    if (data.gpa_semester !== undefined) updateData.gpa_semester = data.gpa_semester;
-    if (data.gpa_cumulative !== undefined) updateData.gpa_cumulative = data.gpa_cumulative;
-
-    const record = await this.prisma.gpaHistory.update({
-      where: { id: BigInt(id) },
-      data: updateData,
-      include: {
-        student: true,
-        semester: true,
-      },
-    });
-
-    return this.serializeGpaHistory(record);
-  }
-
-  async remove(id: string) {
-    const existing = await this.prisma.gpaHistory.findUnique({
-      where: { id: BigInt(id) },
-    });
-
-    if (!existing) {
-      throw new NotFoundException(`Không tìm thấy lịch sử GPA với ID ${id}`);
-    }
-
-    await this.prisma.gpaHistory.delete({
-      where: { id: BigInt(id) },
-    });
-
-    return { message: `Đã xóa lịch sử GPA với ID ${id}` };
   }
 }
