@@ -39,10 +39,24 @@ export class DocumentTypeController {
    * GET /document-types
    */
   @Get()
-  @ApiOperation({ summary: 'Get all document types (public)' })
+  @ApiOperation({
+    summary: 'Lấy danh sách loại tài liệu công khai',
+    description:
+      'Lấy danh sách tất cả loại tài liệu (công khai, không yêu cầu xác thực, không phân trang)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Document types retrieved successfully',
+    description: 'Lấy danh sách loại tài liệu thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy danh sách loại tài liệu thành công',
+        data: [
+          { id: 1, document_name: 'Giấy chứng chỉ điểm', processing_days: 5 },
+        ],
+        total: 1,
+      },
+    },
   })
   async findAllPublic() {
     const data = await this.documentTypeService.findAllSimple();
@@ -69,14 +83,28 @@ export class AdminDocumentTypeController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new document type' })
+  @ApiOperation({
+    summary: 'Tạo loại tài liệu mới',
+    description: 'Tạo một loại tài liệu mới với tên và số ngày xử lý',
+  })
   @ApiResponse({
     status: 201,
-    description: 'Document type created successfully',
+    description: 'Loại tài liệu được tạo thành công',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Loại tài liệu được tạo thành công',
+        data: {
+          id: 1,
+          document_name: 'Giấy chứng chỉ điểm',
+          processing_days: 5,
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid input or duplicate document name',
+    description: 'Input không hợp lệ hoặc tên tài liệu đã tồn tại',
   })
   async create(@Body() createDto: CreateDocumentTypeDto) {
     const data = await this.documentTypeService.create(createDto);
@@ -92,10 +120,25 @@ export class AdminDocumentTypeController {
    * GET /admin/document-types?page=1&limit=20
    */
   @Get()
-  @ApiOperation({ summary: 'Get all document types with pagination (admin)' })
+  @ApiOperation({
+    summary: 'Lấy danh sách loại tài liệu (quản trị)',
+    description: 'Lấy danh sách loại tài liệu với phân trang (chỉ admin)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Document types retrieved successfully',
+    description: 'Lấy danh sách loại tài liệu thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy danh sách loại tài liệu thành công',
+        data: [
+          { id: 1, document_name: 'Giấy chứng chỉ điểm', processing_days: 5 },
+        ],
+        page: 1,
+        limit: 20,
+        total: 1,
+      },
+    },
   })
   async findAll(@Query() query: QueryDocumentTypeDto) {
     const result = await this.documentTypeService.findAll(query);
@@ -111,12 +154,26 @@ export class AdminDocumentTypeController {
    * GET /admin/document-types/:id
    */
   @Get(':id')
-  @ApiOperation({ summary: 'Get document type details by ID' })
+  @ApiOperation({
+    summary: 'Lấy chi tiết loại tài liệu',
+    description: 'Lấy thông tin chi tiết của một loại tài liệu theo ID',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Document type retrieved successfully',
+    description: 'Lấy chi tiết loại tài liệu thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy chi tiết loại tài liệu thành công',
+        data: {
+          id: 1,
+          document_name: 'Giấy chứng chỉ điểm',
+          processing_days: 5,
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 404, description: 'Document type not found' })
+  @ApiResponse({ status: 404, description: 'Loại tài liệu không tìm thấy' })
   async findById(@Param('id', ParseIntPipe) id: number) {
     const data = await this.documentTypeService.findById(id);
     return {
@@ -131,13 +188,23 @@ export class AdminDocumentTypeController {
    * PATCH /admin/document-types/:id
    */
   @Patch(':id')
-  @ApiOperation({ summary: 'Update document type' })
+  @ApiOperation({
+    summary: 'Cập nhật loại tài liệu',
+    description: 'Cập nhật thông tin loại tài liệu theo ID',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Document type updated successfully',
+    description: 'Loại tài liệu được cập nhật thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Loại tài liệu được cập nhật thành công',
+        data: { id: 1, document_name: 'Cập nhật tên', processing_days: 7 },
+      },
+    },
   })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  @ApiResponse({ status: 404, description: 'Document type not found' })
+  @ApiResponse({ status: 400, description: 'Input không hợp lệ' })
+  @ApiResponse({ status: 404, description: 'Loại tài liệu không tìm thấy' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateDocumentTypeDto,
@@ -156,16 +223,19 @@ export class AdminDocumentTypeController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete document type' })
+  @ApiOperation({
+    summary: 'Xóa loại tài liệu',
+    description: 'Xóa loại tài liệu theo ID',
+  })
   @ApiResponse({
     status: 204,
-    description: 'Document type deleted successfully',
+    description: 'Loại tài liệu được xóa thành công',
   })
   @ApiResponse({
     status: 400,
-    description: 'Cannot delete document type in use',
+    description: 'Không thể xóa loại tài liệu hiện đang được sử dụng',
   })
-  @ApiResponse({ status: 404, description: 'Document type not found' })
+  @ApiResponse({ status: 404, description: 'Loại tài liệu không tìm thấy' })
   async delete(@Param('id', ParseIntPipe) id: number) {
     await this.documentTypeService.delete(id);
   }

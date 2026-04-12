@@ -35,13 +35,31 @@ export class StudentServiceRequestsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new service request' })
+  @ApiOperation({
+    summary: 'Tạo yêu cầu dịch vụ mới',
+    description:
+      'Sinh viên tạo một yêu cầu dịch vụ mới (xác nhận điểm, làm giấy tờ...)',
+  })
   @ApiResponse({
     status: 201,
-    description: 'Service request created successfully',
+    description: 'Yêu cầu dịch vụ được tạo thành công',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Yêu cầu dịch vụ được tạo thành công',
+        data: {
+          id: 1,
+          document_type_id: 1,
+          student_id: 1,
+          reason: 'Tôi cần xác nhận điểm để làm hồ sơ du học',
+          status: 0,
+          created_at: '2026-04-12T10:00:00Z',
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  @ApiResponse({ status: 404, description: 'Document type not found' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
+  @ApiResponse({ status: 404, description: 'Loại tài liệu không tìm thấy' })
   async create(@Request() req, @Body() createDto: CreateServiceRequestDto) {
     const data = await this.studentServiceRequestsService.createServiceRequest(
       req.user.id,
@@ -57,10 +75,32 @@ export class StudentServiceRequestsController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get all service requests for current student' })
+  @ApiOperation({
+    summary: 'Lấy danh sách yêu cầu dịch vụ của sinh viên',
+    description:
+      'Lấy danh sách tất cả yêu cầu dịch vụ của sinh viên đang đăng nhập',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Service requests retrieved successfully',
+    description: 'Lấy danh sách yêu cầu dịch vụ thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy danh sách yêu cầu dịch vụ thành công',
+        data: [
+          {
+            id: 1,
+            document_type: 'Giấy chứng chỉ điểm',
+            reason: 'Tôi cần xác nhận điểm',
+            status: 0,
+            created_at: '2026-04-12T10:00:00Z',
+          },
+        ],
+        page: 1,
+        limit: 10,
+        total: 1,
+      },
+    },
   })
   async findAll(@Request() req, @Query() query: QueryStudentServiceRequestDto) {
     const result = await this.studentServiceRequestsService.findAllByStudent(
@@ -77,13 +117,30 @@ export class StudentServiceRequestsController {
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get service request details by ID' })
+  @ApiOperation({
+    summary: 'Lấy chi tiết yêu cầu dịch vụ của sinh viên',
+    description:
+      'Lấy thông tin chi tiết một yêu cầu dịch vụ (chỉ xem của chính mình)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Service request details retrieved',
+    description: 'Lấy chi tiết yêu cầu dịch vụ thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy chi tiết yêu cầu dịch vụ thành công',
+        data: {
+          id: 1,
+          document_type: 'Giấy chứng chỉ điểm',
+          reason: 'Tôi cần xác nhận điểm để làm hồ sơ du học',
+          status: 0,
+          created_at: '2026-04-12T10:00:00Z',
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 403, description: 'Access denied' })
-  @ApiResponse({ status: 404, description: 'Service request not found' })
+  @ApiResponse({ status: 403, description: 'Không có quyền truy cập' })
+  @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
   async findOne(@Param('id') id: string, @Request() req) {
     const data = await this.studentServiceRequestsService.findOneByStudent(
       parseInt(id, 10),

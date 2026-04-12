@@ -38,11 +38,33 @@ export class AdminServiceRequestsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get all service requests with filtering and pagination',
+    summary: 'Lấy danh sách yêu cầu dịch vụ (quản lý)',
+    description:
+      'Lấy danh sách tất cả yêu cầu dịch vụ với bộ lọc và phân trang (chỉ admin)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Service requests retrieved successfully',
+    description: 'Lấy danh sách yêu cầu dịch vụ thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy danh sách yêu cầu dịch vụ thành công',
+        data: [
+          {
+            id: 1,
+            student_code: 'HE123456',
+            full_name: 'Nguyễn Văn A',
+            document_type: 'Giấy chứng chỉ điểm',
+            reason: 'Tôi cần xác nhận điểm',
+            status: 0,
+            created_at: '2026-04-12T10:00:00Z',
+          },
+        ],
+        page: 1,
+        limit: 10,
+        total: 1,
+      },
+    },
   })
   async findAll(@Query() query: QueryAdminServiceRequestDto) {
     const result = await this.adminServiceRequestsService.findAll(query);
@@ -56,12 +78,30 @@ export class AdminServiceRequestsController {
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get service request details by ID for admin' })
+  @ApiOperation({
+    summary: 'Lấy chi tiết yêu cầu dịch vụ (admin)',
+    description: 'Lấy thông tin chi tiết một yêu cầu dịch vụ',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Service request details retrieved',
+    description: 'Lấy chi tiết yêu cầu dịch vụ thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy chi tiết yêu cầu dịch vụ thành công',
+        data: {
+          id: 1,
+          student_code: 'HE123456',
+          full_name: 'Nguyễn Văn A',
+          document_type: 'Giấy chứng chỉ điểm',
+          reason: 'Tôi cần xác nhận điểm',
+          status: 0,
+          created_at: '2026-04-12T10:00:00Z',
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 404, description: 'Service request not found' })
+  @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
   async findOne(@Param('id') id: string) {
     const data = await this.adminServiceRequestsService.findOne(
       parseInt(id, 10),
@@ -76,10 +116,26 @@ export class AdminServiceRequestsController {
 
   @Patch(':id/status')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update service request status' })
-  @ApiResponse({ status: 200, description: 'Status updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid status transition' })
-  @ApiResponse({ status: 404, description: 'Service request not found' })
+  @ApiOperation({
+    summary: 'Cập nhật trạng thái yêu cầu dịch vụ',
+    description: 'Duyệt hoặc từ chối yêu cầu dịch vụ từ sinh viên',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cập nhật trạng thái yêu cầu dịch vụ thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Cập nhật trạng thái yêu cầu dịch vụ thành công',
+        data: { id: 1, status: 1, updated_at: '2026-04-12T11:00:00Z' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Chuyển đổi trạng thái không hợp lệ',
+  })
+  @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
   async updateStatus(
     @Param('id') id: string,
     @Body() updateDto: UpdateServiceRequestStatusDto,

@@ -1,17 +1,29 @@
 import { IsOptional, IsNumber, IsEnum, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ServiceRequestStatus } from '../enums';
 
 /**
  * Query DTO for students to retrieve their own service requests
  */
 export class QueryStudentServiceRequestDto {
+  @ApiPropertyOptional({
+    description: 'Số trang (mặc định: 1)',
+    example: 1,
+    minimum: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'Page must be a number' })
   @Min(1, { message: 'Page must be at least 1' })
   page?: number = 1;
 
+  @ApiPropertyOptional({
+    description: 'Số lượng items mỗi trang (mặc định: 10, tối đa: 100)',
+    example: 10,
+    minimum: 1,
+    maximum: 100,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'Limit must be a number' })
