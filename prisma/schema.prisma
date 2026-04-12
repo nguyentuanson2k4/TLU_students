@@ -57,6 +57,7 @@ model User {
   created_at             DateTime  @default(now())
   updated_at             DateTime  @updatedAt
   refresh_token          String?   @db.VarChar(255)
+  avatar_url             String?   @db.VarChar(500)
   reset_password_otp     String?   @db.VarChar(10)
   reset_password_expires DateTime?
 
@@ -95,7 +96,7 @@ model Student {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   // Reverse relations
   enrollments       ClassEnrollment[]
@@ -120,7 +121,7 @@ model Lecturer {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   // Reverse relations
   courseClasses CourseClass[]
@@ -193,7 +194,7 @@ model ClassEnrollment {
   student_id      BigInt
   course_class_id BigInt
 
-  student      Student     @relation(fields: [student_id], references: [id])
+  student      Student     @relation(fields: [student_id], references: [id], onDelete: Cascade)
   course_class CourseClass @relation(fields: [course_class_id], references: [id])
 
   // Reverse relations
@@ -228,7 +229,7 @@ model GpaHistory {
   gpa_cumulative Decimal  @default(0.00) @db.Decimal(3, 2)
   updated_at     DateTime @updatedAt
 
-  student  Student  @relation(fields: [student_id], references: [id])
+  student  Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
   semester Semester @relation(fields: [semester_id], references: [id])
 
   @@unique([student_id, semester_id])
@@ -246,7 +247,7 @@ model StudentFace {
   embedding_vector Unsupported("vector(512)")?
   created_at       DateTime                    @default(now())
 
-  student Student @relation(fields: [student_id], references: [id])
+  student Student @relation(fields: [student_id], references: [id], onDelete: Cascade)
 
   @@index([student_id])
   @@map("student_faces")
@@ -284,7 +285,7 @@ model AttendanceRecord {
   created_at         DateTime         @default(now())
 
   session AttendanceSession @relation(fields: [session_id], references: [id])
-  student Student           @relation(fields: [student_id], references: [id])
+  student Student           @relation(fields: [student_id], references: [id], onDelete: Cascade)
   updater User?             @relation("AttendanceUpdater", fields: [updated_by], references: [id])
 
   @@unique([session_id, student_id])
@@ -302,7 +303,7 @@ model ChatSession {
   end_time   DateTime?
   status     Int       @default(1) @db.SmallInt
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   // Reverse relations
   messages ChatMessage[]
@@ -437,7 +438,7 @@ model Post {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  author       User         @relation(fields: [author_id], references: [id])
+  author       User         @relation(fields: [author_id], references: [id], onDelete: Cascade)
   course_class CourseClass? @relation(fields: [course_class_id], references: [id])
   subject      Subject?     @relation(fields: [subject_id], references: [id])
 
@@ -471,7 +472,7 @@ model PostInteraction {
   created_at DateTime @default(now())
 
   post Post @relation(fields: [post_id], references: [id])
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([post_id, user_id, type])
   @@index([post_id])
@@ -487,8 +488,8 @@ model Conversation {
   user_id_2       BigInt
   last_message_at DateTime?
 
-  user1 User @relation("User1Conversations", fields: [user_id_1], references: [id])
-  user2 User @relation("User2Conversations", fields: [user_id_2], references: [id])
+  user1 User @relation("User1Conversations", fields: [user_id_1], references: [id], onDelete: Cascade)
+  user2 User @relation("User2Conversations", fields: [user_id_2], references: [id], onDelete: Cascade)
 
   // Reverse relations
   messages DirectMessage[]
@@ -508,7 +509,7 @@ model DirectMessage {
   created_at      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversation_id], references: [id])
-  sender       User         @relation(fields: [sender_id], references: [id])
+  sender       User         @relation(fields: [sender_id], references: [id], onDelete: Cascade)
 
   @@index([conversation_id])
   @@index([sender_id])
@@ -537,7 +538,7 @@ model ServiceRequest {
   status           Int      @default(1) @db.SmallInt
   created_at       DateTime @default(now())
 
-  user         User         @relation(fields: [user_id], references: [id])
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documentType DocumentType @relation(fields: [document_type_id], references: [id])
 
   @@index([user_id])
@@ -554,7 +555,7 @@ model WarningLog {
   is_resolved Boolean         @default(false)
   created_at  DateTime        @default(now())
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@map("warning_logs")
@@ -570,7 +571,7 @@ model Notification {
   is_read           Boolean  @default(false)
   created_at        DateTime @default(now())
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@map("notifications")
@@ -587,7 +588,7 @@ model TuitionFee {
   deadline        DateTime
   status          Int      @default(1) @db.SmallInt
 
-  student  Student  @relation(fields: [student_id], references: [id])
+  student  Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
   semester Semester @relation(fields: [semester_id], references: [id])
 
   // Reverse relations

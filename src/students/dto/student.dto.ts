@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsEmail, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsEmail, IsDateString, IsArray, ArrayNotEmpty } from 'class-validator';
 import { Gender } from '@prisma/client';
 
 export class CreateStudentDto {
@@ -121,4 +121,12 @@ export class UpdateStudentProfileDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+}
+
+export class BulkDeleteStudentsDto {
+  @ApiProperty({ example: ['SV001', 'SV002'], description: 'Danh sách mã sinh viên cần xóa' })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  student_codes!: string[];
 }

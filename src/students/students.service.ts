@@ -270,6 +270,34 @@ export class StudentsService {
     });
   }
 
+  async bulkRemove(codes: string[]): Promise<any> {
+    const students = await this.prisma.student.findMany({
+      where: { student_code: { in: codes } },
+      select: { user_id: true },
+    });
+
+    if (students.length === 0) {
+      throw new NotFoundException(`Không tìm thấy sinh viên nào trong danh sách cung cấp.`);
+    }
+
+    const userIds = students.map((s) => s.user_id);
+
+    return this.prisma.$transaction(async (tx) => {
+      const deletedStudents = await tx.student.deleteMany({
+        where: { student_code: { in: codes } },
+      });
+
+      const deletedUsers = await tx.user.deleteMany({
+        where: { id: { in: userIds } },
+      });
+
+      return {
+        message: `Đã xóa thành công ${deletedStudents.count} sinh viên và tài khoản liên kết.`,
+        deleted_count: deletedStudents.count,
+      };
+    });
+  }
+
   async bulkCreateFromExcel(fileBuffer: Uint8Array): Promise<any> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(fileBuffer as any);

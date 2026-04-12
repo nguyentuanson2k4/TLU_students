@@ -1,11 +1,15 @@
 import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../face-recognition/cloudinary.service';
 import { User, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private cloudinary: CloudinaryService,
+  ) { }
 
   async create(data: any): Promise<any> {
     const role = data.role as Role || Role.ADMIN;
@@ -188,5 +192,24 @@ export class UsersService {
         reset_password_expires: null,
       },
     });
+  }
+
+  async updateAvatar(userId: string | bigint, file: Express.Multer.File) {
+    const id = typeof userId === 'string' ? BigInt(userId) : userId;
+
+    // Upload ảnh lên Cloudinary
+    const uploadResult = await this.cloudinary.uploadAvatar(file, id.toString());
+
+    // Cập nhật avatar_url trong database
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: { avatar_url: uploadResult.secure_url },
+    });
+
+    const { password, refresh_token, reset_password_otp, reset_password_expires, ...safeUser } = updatedUser;
+    return {
+      ...safeUser,
+      id: safeUser.id.toString(),
+    };
   }
 }

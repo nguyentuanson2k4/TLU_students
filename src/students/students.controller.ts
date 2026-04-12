@@ -31,6 +31,7 @@ import {
   CreateStudentDto,
   UpdateStudentDto,
   UpdateStudentProfileDto,
+  BulkDeleteStudentsDto,
 } from './dto/student.dto';
 
 // Type for file upload - using any due to Express.Multer.File type compatibility
@@ -145,6 +146,13 @@ export class StudentsController {
     @Body() updateStudentDto: UpdateStudentDto,
   ) {
     return this.studentsService.update(code, updateStudentDto);
+  }
+
+  @Delete('bulk')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Xóa nhiều sinh viên cùng lúc (Admin)' })
+  bulkRemove(@Body() bulkDeleteDto: BulkDeleteStudentsDto) {
+    return this.studentsService.bulkRemove(bulkDeleteDto.student_codes);
   }
 
   @Delete(':code')
