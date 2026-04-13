@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { FaceEngineService } from './face-engine.service';
 import { CloudinaryService } from './cloudinary.service';
 import { AttendanceMethod } from '@prisma/client';
@@ -19,9 +20,10 @@ export class FaceRecognitionService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
     private readonly faceEngine: FaceEngineService,
     private readonly cloudinary: CloudinaryService,
-  ) {}
+  ) { }
 
   // ===================== FACE REGISTRATION =====================
 
@@ -88,6 +90,22 @@ export class FaceRecognitionService {
       confidence: embeddingResult.confidence,
       total_faces: existingFaces + 1,
     };
+  }
+
+  /**
+   * Sinh viên tự xem danh sách khuôn mặt của chính mình.
+   */
+  async getMyFaces(user: any) {
+    const student = await this.prisma.student.findUnique({
+      where: { user_id: BigInt(user.id) },
+      select: { id: true },
+    });
+
+    if (!student) {
+      throw new BadRequestException('Không tìm thấy thông tin sinh viên của bạn');
+    }
+
+    return this.getStudentFaces(student.id);
   }
 
   /**
@@ -159,6 +177,7 @@ export class FaceRecognitionService {
     sessionId: bigint,
     file: Express.Multer.File,
     threshold?: number,
+    user?: any,
   ) {
     const similarityThreshold = threshold || DEFAULT_THRESHOLD;
 
@@ -180,13 +199,31 @@ export class FaceRecognitionService {
       throw new NotFoundException(`Buổi điểm danh ${sessionId} không tồn tại`);
     }
 
-    const enrolledStudentIds = session.course_class.enrollments.map(
+    let enrolledStudentIds = session.course_class.enrollments.map(
       (e) => e.student_id,
     );
 
     if (enrolledStudentIds.length === 0) {
       throw new BadRequestException('Chưa có sinh viên nào đăng ký lớp học phần này');
     }
+
+    if (user && user.role === 'STUDENT') {
+      const student = await this.prisma.student.findUnique({
+        where: { user_id: BigInt(user.id) },
+      });
+
+      if (!student) {
+        throw new BadRequestException('Không tìm thấy thông tin sinh viên của bạn');
+      }
+
+      if (!enrolledStudentIds.includes(student.id)) {
+        throw new BadRequestException('Bạn không có tên trong danh sách lớp học phần này');
+      }
+
+      // Giới hạn chỉ đối chiếu với khuôn mặt của chính sinh viên đang đăng nhập
+      enrolledStudentIds = [student.id];
+    }
+
 
     // 2. Lấy embeddings - sử dụng raw SQL cho vector type
     const knownFaces = (await this.prisma.$queryRawUnsafe(
@@ -297,6 +334,12 @@ export class FaceRecognitionService {
     this.logger.log(
       `Attendance recorded: student=${record.student.student_code}, similarity=${matchResult.similarity}`,
     );
+
+    // Emit event cho realtime WebSocket
+    this.eventEmitter.emit('attendance.record.created', {
+      sessionId: sessionId.toString(),
+      record,
+    });
 
     return {
       success: true,
@@ -435,6 +478,12 @@ export class FaceRecognitionService {
                 select: { id: true, student_code: true, full_name: true },
               },
             },
+          });
+
+          // Emit event cho realtime WebSocket
+          this.eventEmitter.emit('attendance.record.created', {
+            sessionId: sessionId.toString(),
+            record,
           });
 
           results.push({

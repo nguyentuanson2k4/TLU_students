@@ -215,7 +215,7 @@ model Grade {
   score_total_10   Decimal  @default(0.00) @db.Decimal(4, 2)
   updated_at       DateTime @updatedAt
 
-  enrollment ClassEnrollment @relation(fields: [enrollment_id], references: [id])
+  enrollment ClassEnrollment @relation(fields: [enrollment_id], references: [id], onDelete: Cascade)
 
   @@index([enrollment_id])
   @@map("grades")

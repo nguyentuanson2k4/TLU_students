@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   CreateAttendanceSessionDto,
   UpdateAttendanceSessionDto,
@@ -14,7 +15,10 @@ import {
 
 @Injectable()
 export class AttendanceService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) { }
 
   // ===================== ATTENDANCE SESSION =====================
 
@@ -172,7 +176,7 @@ export class AttendanceService {
       throw new ConflictException('Sinh viên đã được điểm danh trong buổi này');
     }
 
-    return this.prisma.attendanceRecord.create({
+    const record = await this.prisma.attendanceRecord.create({
       data: {
         session_id: BigInt(dto.session_id),
         student_id: BigInt(dto.student_id),
@@ -185,7 +189,25 @@ export class AttendanceService {
         updated_by: dto.updated_by ? BigInt(dto.updated_by) : null,
         note: dto.note,
       },
+      include: {
+        student: {
+          select: {
+            id: true,
+            student_code: true,
+            full_name: true,
+            class_name: true,
+          },
+        },
+      },
     });
+
+    // Emit event cho realtime WebSocket
+    this.eventEmitter.emit('attendance.record.created', {
+      sessionId: dto.session_id.toString(),
+      record,
+    });
+
+    return record;
   }
 
   async findRecordsBySession(sessionId: bigint) {
@@ -290,10 +312,29 @@ export class AttendanceService {
     if (dto.updated_by) data.updated_by = BigInt(dto.updated_by);
     if (dto.note !== undefined) data.note = dto.note;
 
-    return this.prisma.attendanceRecord.update({
+    const record = await this.prisma.attendanceRecord.update({
       where: { id },
       data,
+      include: {
+        session: { select: { id: true } },
+        student: {
+          select: {
+            id: true,
+            student_code: true,
+            full_name: true,
+            class_name: true,
+          },
+        },
+      },
     });
+
+    // Emit event cho realtime WebSocket
+    this.eventEmitter.emit('attendance.record.updated', {
+      sessionId: record.session.id.toString(),
+      record,
+    });
+
+    return record;
   }
 
   async removeRecord(id: bigint) {
@@ -314,7 +355,7 @@ export class AttendanceService {
       throw new NotFoundException('Buổi điểm danh không tồn tại');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const bulkResult = await this.prisma.$transaction(async (tx) => {
       const results: any[] = [];
 
       for (const item of dto.records) {
@@ -354,6 +395,14 @@ export class AttendanceService {
 
       return results;
     });
+
+    // Emit event cho realtime WebSocket (sau khi transaction hoàn tất)
+    this.eventEmitter.emit('attendance.records.bulk_created', {
+      sessionId: dto.session_id.toString(),
+      records: bulkResult,
+    });
+
+    return bulkResult;
   }
 
   // ===================== STATISTICS =====================
