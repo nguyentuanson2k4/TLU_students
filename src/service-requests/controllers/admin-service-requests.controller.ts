@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { AdminServiceRequestsService } from '../services/admin-service-requests.service';
+import { ServiceRequestsService } from '../service-requests.service';
 import {
   QueryAdminServiceRequestDto,
   UpdateServiceRequestStatusDto,
@@ -32,7 +32,7 @@ import {
 @Roles(Role.ADMIN)
 export class AdminServiceRequestsController {
   constructor(
-    private readonly adminServiceRequestsService: AdminServiceRequestsService,
+    private readonly serviceRequestsService: ServiceRequestsService,
   ) {}
 
   @Get()
@@ -67,7 +67,7 @@ export class AdminServiceRequestsController {
     },
   })
   async findAll(@Query() query: QueryAdminServiceRequestDto) {
-    const result = await this.adminServiceRequestsService.findAll(query);
+    const result = await this.serviceRequestsService.findAllAdmin(query);
 
     return {
       statusCode: HttpStatus.OK,
@@ -103,7 +103,7 @@ export class AdminServiceRequestsController {
   })
   @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
   async findOne(@Param('id') id: string) {
-    const data = await this.adminServiceRequestsService.findOne(
+    const data = await this.serviceRequestsService.findOneAdmin(
       parseInt(id, 10),
     );
 
@@ -140,7 +140,7 @@ export class AdminServiceRequestsController {
     @Param('id') id: string,
     @Body() updateDto: UpdateServiceRequestStatusDto,
   ) {
-    const data = await this.adminServiceRequestsService.updateStatus(
+    const data = await this.serviceRequestsService.updateStatus(
       parseInt(id, 10),
       updateDto,
     );

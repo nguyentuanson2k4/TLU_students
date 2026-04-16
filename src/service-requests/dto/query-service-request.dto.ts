@@ -1,7 +1,6 @@
-import { IsOptional, IsNumber, IsEnum, Min, Max } from 'class-validator';
+import { IsOptional, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ServiceRequestStatus } from '../enums';
 
 /**
  * Query DTO for students to retrieve their own service requests

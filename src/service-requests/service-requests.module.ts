@@ -1,15 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ServiceRequestsService } from './service-requests.service';
+import { ServiceRequestNotificationService } from './service-request-notification.service';
 import {
-  ServiceRequestService,
-  DocumentTypeService,
-  StudentServiceRequestsService,
-  AdminServiceRequestsService,
-  ServiceRequestNotificationService,
-} from './services';
-import {
-  ServiceRequestController,
-  DocumentTypeController,
   StudentServiceRequestsController,
   AdminServiceRequestsController,
 } from './controllers';
@@ -17,24 +10,10 @@ import {
 @Module({
   imports: [PrismaModule],
   controllers: [
-    ServiceRequestController,
-    DocumentTypeController,
     StudentServiceRequestsController,
     AdminServiceRequestsController,
   ],
-  providers: [
-    ServiceRequestService,
-    DocumentTypeService,
-    StudentServiceRequestsService,
-    AdminServiceRequestsService,
-    ServiceRequestNotificationService,
-  ],
-  exports: [
-    ServiceRequestService,
-    DocumentTypeService,
-    StudentServiceRequestsService,
-    AdminServiceRequestsService,
-    ServiceRequestNotificationService,
-  ],
+  providers: [ServiceRequestsService, ServiceRequestNotificationService],
+  exports: [ServiceRequestsService, ServiceRequestNotificationService],
 })
 export class ServiceRequestsModule {}
