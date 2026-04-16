@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { FaceEngineService } from './face-engine.service';
 import { CloudinaryService } from './cloudinary.service';
 import { AttendanceMethod } from '@prisma/client';
@@ -13,15 +14,30 @@ import { AttendanceMethod } from '@prisma/client';
 const MAX_FACES_PER_STUDENT = 5;
 const DEFAULT_THRESHOLD = 0.6;
 
+/**
+ * Tính khoảng cách giữa 2 điểm tọa độ (m).
+ */
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Bán kính trái đất (mét)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 @Injectable()
 export class FaceRecognitionService {
   private readonly logger = new Logger(FaceRecognitionService.name);
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
     private readonly faceEngine: FaceEngineService,
     private readonly cloudinary: CloudinaryService,
-  ) {}
+  ) { }
 
   // ===================== FACE REGISTRATION =====================
 
@@ -88,6 +104,22 @@ export class FaceRecognitionService {
       confidence: embeddingResult.confidence,
       total_faces: existingFaces + 1,
     };
+  }
+
+  /**
+   * Sinh viên tự xem danh sách khuôn mặt của chính mình.
+   */
+  async getMyFaces(user: any) {
+    const student = await this.prisma.student.findUnique({
+      where: { user_id: BigInt(user.id) },
+      select: { id: true },
+    });
+
+    if (!student) {
+      throw new BadRequestException('Không tìm thấy thông tin sinh viên của bạn');
+    }
+
+    return this.getStudentFaces(student.id);
   }
 
   /**
@@ -159,6 +191,9 @@ export class FaceRecognitionService {
     sessionId: bigint,
     file: Express.Multer.File,
     threshold?: number,
+    user?: any,
+    latitude?: number,
+    longitude?: number,
   ) {
     const similarityThreshold = threshold || DEFAULT_THRESHOLD;
 
@@ -180,13 +215,79 @@ export class FaceRecognitionService {
       throw new NotFoundException(`Buổi điểm danh ${sessionId} không tồn tại`);
     }
 
-    const enrolledStudentIds = session.course_class.enrollments.map(
+    if (!session.date || !session.check_in_time) {
+      throw new BadRequestException('Buổi điểm danh chưa được thiết lập thời gian');
+    }
+
+    // Validate vị trí (Location Check)
+    const { latitude: classLat, longitude: classLon, allowed_radius } = session.course_class as any;
+    if (classLat != null && classLon != null) {
+      if (latitude == null || longitude == null) {
+        throw new BadRequestException('Lớp học yêu cầu xác minh vị trí. Vui lòng cung cấp vị trí hiện tại của bạn để điểm danh.');
+      }
+      const distance = calculateDistance(latitude, longitude, classLat, classLon);
+      const allowedRadius = allowed_radius || 50;
+      if (distance > allowedRadius) {
+        throw new BadRequestException(`Bạn đang ở ngoài phạm vi cho phép (cách quá ${allowedRadius}m). Khoảng cách hiện tại tới lớp học là: ${Math.round(distance)}m`);
+      }
+    }
+
+    const sessionDate = new Date(session.date);
+    const sessionTime = new Date(session.check_in_time);
+    const startDateTime = new Date(
+      sessionDate.getUTCFullYear(),
+      sessionDate.getUTCMonth(),
+      sessionDate.getUTCDate(),
+      sessionTime.getUTCHours(),
+      sessionTime.getUTCMinutes(),
+      sessionTime.getUTCSeconds()
+    );
+
+    const now = new Date();
+    const diffMs = now.getTime() - startDateTime.getTime();
+    const diffMinutes = diffMs / 1000 / 60;
+
+    let derivedStatus = 1;
+    let timeNote = '';
+
+    if (diffMinutes < 0) {
+      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    } else if (diffMinutes <= 15) {
+      derivedStatus = 1; // Đúng giờ
+      timeNote = 'Đúng giờ';
+    } else if (diffMinutes <= 35) {
+      derivedStatus = 2; // Muộn
+      timeNote = 'Muộn';
+    } else {
+      derivedStatus = 0; // Vắng
+      timeNote = 'Quá thời gian (Vắng)';
+    }
+
+    let enrolledStudentIds = session.course_class.enrollments.map(
       (e) => e.student_id,
     );
 
     if (enrolledStudentIds.length === 0) {
       throw new BadRequestException('Chưa có sinh viên nào đăng ký lớp học phần này');
     }
+
+    if (user && user.role === 'STUDENT') {
+      const student = await this.prisma.student.findUnique({
+        where: { user_id: BigInt(user.id) },
+      });
+
+      if (!student) {
+        throw new BadRequestException('Không tìm thấy thông tin sinh viên của bạn');
+      }
+
+      if (!enrolledStudentIds.includes(student.id)) {
+        throw new BadRequestException('Bạn không có tên trong danh sách lớp học phần này');
+      }
+
+      // Giới hạn chỉ đối chiếu với khuôn mặt của chính sinh viên đang đăng nhập
+      enrolledStudentIds = [student.id];
+    }
+
 
     // 2. Lấy embeddings - sử dụng raw SQL cho vector type
     const knownFaces = (await this.prisma.$queryRawUnsafe(
@@ -275,12 +376,12 @@ export class FaceRecognitionService {
         session_id: sessionId,
         student_id: matchResult.studentId!,
         arrival_time: new Date(),
-        status: 1, // Có mặt
+        status: derivedStatus,
         confidence_score: matchResult.similarity,
         is_manual_override: false,
         evidence_url: evidenceUpload.secure_url,
         attendance_method: AttendanceMethod.FACE_ID,
-        note: `Điểm danh tự động bằng Face ID (similarity: ${matchResult.similarity.toFixed(4)})`,
+        note: `Face ID - ${timeNote} (similarity: ${matchResult.similarity.toFixed(4)})`,
       },
       include: {
         student: {
@@ -297,6 +398,12 @@ export class FaceRecognitionService {
     this.logger.log(
       `Attendance recorded: student=${record.student.student_code}, similarity=${matchResult.similarity}`,
     );
+
+    // Emit event cho realtime WebSocket
+    this.eventEmitter.emit('attendance.record.created', {
+      sessionId: sessionId.toString(),
+      record,
+    });
 
     return {
       success: true,
@@ -334,6 +441,41 @@ export class FaceRecognitionService {
 
     if (!session) {
       throw new NotFoundException(`Buổi điểm danh ${sessionId} không tồn tại`);
+    }
+
+    if (!session.date || !session.check_in_time) {
+      throw new BadRequestException('Buổi điểm danh chưa được thiết lập thời gian');
+    }
+
+    const sessionDate = new Date(session.date);
+    const sessionTime = new Date(session.check_in_time);
+    const startDateTime = new Date(
+      sessionDate.getUTCFullYear(),
+      sessionDate.getUTCMonth(),
+      sessionDate.getUTCDate(),
+      sessionTime.getUTCHours(),
+      sessionTime.getUTCMinutes(),
+      sessionTime.getUTCSeconds()
+    );
+
+    const now = new Date();
+    const diffMs = now.getTime() - startDateTime.getTime();
+    const diffMinutes = diffMs / 1000 / 60;
+
+    let derivedStatus = 1;
+    let timeNote = '';
+
+    if (diffMinutes < 0) {
+      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    } else if (diffMinutes <= 15) {
+      derivedStatus = 1;
+      timeNote = 'Đúng giờ';
+    } else if (diffMinutes <= 35) {
+      derivedStatus = 2;
+      timeNote = 'Muộn';
+    } else {
+      derivedStatus = 0;
+      timeNote = 'Quá thời gian (Vắng)';
     }
 
     const enrolledStudentIds = session.course_class.enrollments.map(
@@ -423,18 +565,24 @@ export class FaceRecognitionService {
               session_id: sessionId,
               student_id: match.studentId!,
               arrival_time: new Date(),
-              status: 1,
+              status: derivedStatus,
               confidence_score: match.similarity,
               is_manual_override: false,
               evidence_url: evidenceUpload.secure_url,
               attendance_method: AttendanceMethod.FACE_ID,
-              note: `Điểm danh tự động (nhóm) - Face #${i + 1} (similarity: ${match.similarity.toFixed(4)})`,
+              note: `Face ID (Nhóm) - ${timeNote} - Face #${i + 1} (similarity: ${match.similarity.toFixed(4)})`,
             },
             include: {
               student: {
                 select: { id: true, student_code: true, full_name: true },
               },
             },
+          });
+
+          // Emit event cho realtime WebSocket
+          this.eventEmitter.emit('attendance.record.created', {
+            sessionId: sessionId.toString(),
+            record,
           });
 
           results.push({

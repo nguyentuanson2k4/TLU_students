@@ -6,9 +6,14 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import * as path from 'path';
+import { Prisma } from '@prisma/client';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
+};
+
+(Prisma.Decimal.prototype as any).toJSON = function () {
+  return this.toNumber();
 };
 
 async function bootstrap() {

@@ -12,6 +12,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   Query,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FaceRecognitionService } from './face-recognition.service';
@@ -34,7 +35,7 @@ import { Role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('face-recognition')
 export class FaceRecognitionController {
-  constructor(private readonly faceRecognitionService: FaceRecognitionService) {}
+  constructor(private readonly faceRecognitionService: FaceRecognitionService) { }
 
   // ===================== HEALTH CHECK =====================
 
@@ -48,7 +49,7 @@ export class FaceRecognitionController {
 
   @Post('register/:studentId')
   @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({ summary: 'Đăng ký khuôn mặt cho sinh viên (upload ảnh, max 5 ảnh)' })
+  @ApiOperation({ summary: 'Đăng ký khuôn mặt cho sinh viên (upload ảnh, max 5 ảnh) (Roles: ADMIN, LECTURER)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -88,16 +89,23 @@ export class FaceRecognitionController {
     );
   }
 
+  @Get('me')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Xem danh sách ảnh khuôn mặt của chính mình (Roles: STUDENT)' })
+  getMyFaces(@Req() req: any) {
+    return this.faceRecognitionService.getMyFaces(req.user);
+  }
+
   @Get('student/:studentId')
-  @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
-  @ApiOperation({ summary: 'Xem danh sách ảnh khuôn mặt đã đăng ký của sinh viên' })
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @ApiOperation({ summary: 'Xem danh sách ảnh khuôn mặt đã đăng ký của sinh viên (Roles: ADMIN, LECTURER)' })
   getStudentFaces(@Param('studentId') studentId: string) {
     return this.faceRecognitionService.getStudentFaces(BigInt(studentId));
   }
 
   @Delete('faces/:faceId')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Xóa ảnh khuôn mặt (Admin only)' })
+  @ApiOperation({ summary: 'Xóa ảnh khuôn mặt (Roles: ADMIN)' })
   deleteFace(@Param('faceId') faceId: string) {
     return this.faceRecognitionService.deleteFace(BigInt(faceId));
   }
@@ -105,9 +113,9 @@ export class FaceRecognitionController {
   // ===================== FACE ATTENDANCE =====================
 
   @Post('attendance/:sessionId')
-  @Roles(Role.ADMIN, Role.LECTURER)
+  @Roles(Role.STUDENT)
   @ApiOperation({
-    summary: 'Điểm danh bằng khuôn mặt (1 sinh viên)',
+    summary: 'Điểm danh cá nhân bằng khuôn mặt (Self-Attendance) (Roles: STUDENT)',
     description:
       'Upload ảnh khuôn mặt 1 SV. Hệ thống sẽ nhận diện và tự động điểm danh nếu match.',
   })
@@ -142,18 +150,22 @@ export class FaceRecognitionController {
     )
     file: Express.Multer.File,
     @Body() dto: AttendanceFaceDto,
+    @Req() req: any,
   ) {
     return this.faceRecognitionService.recognizeAndAttend(
       BigInt(sessionId),
       file,
       dto.threshold,
+      req.user,
+      dto.latitude,
+      dto.longitude,
     );
   }
 
   @Post('attendance/:sessionId/group')
   @Roles(Role.ADMIN, Role.LECTURER)
   @ApiOperation({
-    summary: 'Điểm danh nhóm bằng ảnh lớp (nhiều khuôn mặt)',
+    summary: 'Điểm danh nhóm bằng ảnh lớp (nhiều khuôn mặt) (Roles: ADMIN, LECTURER)',
     description:
       'Upload ảnh chụp cả lớp. Hệ thống sẽ nhận diện tất cả khuôn mặt và điểm danh tự động.',
   })
@@ -201,7 +213,7 @@ export class FaceRecognitionController {
   @Post('verify/:studentId')
   @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   @ApiOperation({
-    summary: 'Xác minh khuôn mặt (chỉ kiểm tra, không điểm danh)',
+    summary: 'Xác minh khuôn mặt (chỉ kiểm tra, không điểm danh) (Roles: ADMIN, LECTURER, STUDENT)',
     description: 'Upload ảnh và kiểm tra xem khuôn mặt có khớp với SV đã đăng ký hay không.',
   })
   @ApiConsumes('multipart/form-data')

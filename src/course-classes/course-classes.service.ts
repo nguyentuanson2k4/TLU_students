@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { CreateCourseClassDto, UpdateCourseClassDto } from './dto/course-class.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AttendanceService } from '../attendance/attendance.service';
 
 @Injectable()
 export class CourseClassesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CourseClassesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attendanceService: AttendanceService,
+  ) {}
 
   async create(createCourseClassDto: CreateCourseClassDto) {
     const data = {
@@ -17,9 +23,23 @@ export class CourseClassesService {
       current_students: 0,
     };
 
-    return this.prisma.courseClass.create({
+    const courseClass = await this.prisma.courseClass.create({
       data,
     });
+
+    // Tự động sinh các buổi điểm danh
+    try {
+      const result = await this.attendanceService.generateSessionsForClass(courseClass.id);
+      this.logger.log(
+        `Auto-generated ${result.created} attendance sessions for course class ${courseClass.id}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to auto-generate sessions for course class ${courseClass.id}: ${error.message}`,
+      );
+    }
+
+    return courseClass;
   }
 
   async createMany(createCourseClassDtos: CreateCourseClassDto[]) {
@@ -93,5 +113,14 @@ export class CourseClassesService {
     return this.prisma.courseClass.delete({
       where: { id },
     });
+  }
+
+  /**
+   * Sinh lại các buổi điểm danh cho lớp học phần.
+   * Delegate sang AttendanceService.
+   */
+  async generateSessions(id: bigint, clearExisting = false) {
+    await this.findOne(id); // Kiểm tra tồn tại
+    return this.attendanceService.generateSessionsForClass(id, clearExisting);
   }
 }

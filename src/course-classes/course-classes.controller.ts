@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { CourseClassesService } from './course-classes.service';
 import { CreateCourseClassDto, UpdateCourseClassDto } from './dto/course-class.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -26,6 +26,28 @@ export class CourseClassesController {
   @ApiOperation({ summary: 'Tạo nhiều lớp học phần mới (Admin)' })
   createMany(@Body() createCourseClassDtos: CreateCourseClassDto[]) {
     return this.courseClassesService.createMany(createCourseClassDtos);
+  }
+
+  @Post(':id/generate-sessions')
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @ApiOperation({
+    summary: 'Tự động sinh các buổi điểm danh cho lớp học phần',
+    description: 'Dựa trên day_of_week, lesson_slot, start_date, end_date để tạo tất cả các buổi điểm danh.',
+  })
+  @ApiQuery({
+    name: 'clearExisting',
+    required: false,
+    type: Boolean,
+    description: 'Xóa các buổi cũ chưa có record điểm danh trước khi tạo mới (mặc định: false)',
+  })
+  generateSessions(
+    @Param('id') id: string,
+    @Query('clearExisting') clearExisting?: string,
+  ) {
+    return this.courseClassesService.generateSessions(
+      BigInt(id),
+      clearExisting === 'true',
+    );
   }
 
   @Get()

@@ -110,4 +110,37 @@ export class CloudinaryService {
       return null;
     }
   }
+
+  /**
+   * Upload ảnh đại diện người dùng lên Cloudinary.
+   * @param file - Multer file object
+   * @param userId - ID của user
+   * @returns Cloudinary upload result với secure_url
+   */
+  async uploadAvatar(
+    file: Express.Multer.File,
+    userId: string,
+  ): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `avatars/${userId}`,
+          resource_type: 'image',
+          transformation: [
+            { width: 400, height: 400, crop: 'fill', gravity: 'face' },
+            { quality: 'auto', fetch_format: 'auto' },
+          ],
+        },
+        (error, result) => {
+          if (error) {
+            this.logger.error(`Cloudinary avatar upload failed: ${error.message}`);
+            return reject(error);
+          }
+          resolve(result!);
+        },
+      );
+
+      uploadStream.end(file.buffer);
+    });
+  }
 }
