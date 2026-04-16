@@ -21,6 +21,8 @@ import { UploadsModule } from './uploads/uploads.module';
 import { AttendanceWarningModule } from './attendance-warning/attendance-warning.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { FaceRecognitionModule } from './face-recognition/face-recognition.module';
+import { StatisticsModule } from './statistics/statistics.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -44,6 +46,8 @@ import { FaceRecognitionModule } from './face-recognition/face-recognition.modul
     AttendanceWarningModule,
     AttendanceModule,
     FaceRecognitionModule,
+    StatisticsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
