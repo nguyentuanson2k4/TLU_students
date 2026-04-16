@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MaxLength, IsInt, Min, IsOptional, IsDateString, Max } from 'class-validator';
+import { IsString, IsNotEmpty, MaxLength, IsInt, Min, IsOptional, IsDateString, Max, Matches, IsNumber } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class CreateCourseClassDto {
@@ -30,6 +30,22 @@ export class CreateCourseClassDto {
   @MaxLength(50)
   room?: string;
 
+  @ApiProperty({ description: 'Vĩ độ phòng học', example: 21.0071, required: false })
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @ApiProperty({ description: 'Kinh độ phòng học', example: 105.8239, required: false })
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @ApiProperty({ description: 'Bán kính tính theo mét cho phép điểm danh', example: 50, required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  allowed_radius?: number;
+
   @ApiProperty({ description: 'Số lượng sinh viên tối đa', example: 60, required: false })
   @IsOptional()
   @IsInt()
@@ -42,9 +58,12 @@ export class CreateCourseClassDto {
   @Max(8)
   day_of_week: number;
 
-  @ApiProperty({ description: 'Kíp học (VD: 1-3)', example: '1-3' })
+  @ApiProperty({ description: 'Thời gian/Kíp học (VD: 7:00-9:00)', example: '7:00-9:00' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]-([01]?[0-9]|2[0-3]):[0-5][0-9]$/, {
+    message: 'Thời gian học phải đúng định dạng hh:mm-hh:mm (VD: 7:00-9:00)',
+  })
   @MaxLength(50)
   lesson_slot: string;
 

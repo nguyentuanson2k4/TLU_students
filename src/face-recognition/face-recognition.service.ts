@@ -14,6 +14,20 @@ import { AttendanceMethod } from '@prisma/client';
 const MAX_FACES_PER_STUDENT = 5;
 const DEFAULT_THRESHOLD = 0.6;
 
+/**
+ * Tính khoảng cách giữa 2 điểm tọa độ (m).
+ */
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Bán kính trái đất (mét)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 @Injectable()
 export class FaceRecognitionService {
   private readonly logger = new Logger(FaceRecognitionService.name);
@@ -178,6 +192,8 @@ export class FaceRecognitionService {
     file: Express.Multer.File,
     threshold?: number,
     user?: any,
+    latitude?: number,
+    longitude?: number,
   ) {
     const similarityThreshold = threshold || DEFAULT_THRESHOLD;
 
@@ -197,6 +213,54 @@ export class FaceRecognitionService {
 
     if (!session) {
       throw new NotFoundException(`Buổi điểm danh ${sessionId} không tồn tại`);
+    }
+
+    if (!session.date || !session.check_in_time) {
+      throw new BadRequestException('Buổi điểm danh chưa được thiết lập thời gian');
+    }
+
+    // Validate vị trí (Location Check)
+    const { latitude: classLat, longitude: classLon, allowed_radius } = session.course_class as any;
+    if (classLat != null && classLon != null) {
+      if (latitude == null || longitude == null) {
+        throw new BadRequestException('Lớp học yêu cầu xác minh vị trí. Vui lòng cung cấp vị trí hiện tại của bạn để điểm danh.');
+      }
+      const distance = calculateDistance(latitude, longitude, classLat, classLon);
+      const allowedRadius = allowed_radius || 50;
+      if (distance > allowedRadius) {
+        throw new BadRequestException(`Bạn đang ở ngoài phạm vi cho phép (cách quá ${allowedRadius}m). Khoảng cách hiện tại tới lớp học là: ${Math.round(distance)}m`);
+      }
+    }
+
+    const sessionDate = new Date(session.date);
+    const sessionTime = new Date(session.check_in_time);
+    const startDateTime = new Date(
+      sessionDate.getUTCFullYear(),
+      sessionDate.getUTCMonth(),
+      sessionDate.getUTCDate(),
+      sessionTime.getUTCHours(),
+      sessionTime.getUTCMinutes(),
+      sessionTime.getUTCSeconds()
+    );
+
+    const now = new Date();
+    const diffMs = now.getTime() - startDateTime.getTime();
+    const diffMinutes = diffMs / 1000 / 60;
+
+    let derivedStatus = 1;
+    let timeNote = '';
+
+    if (diffMinutes < 0) {
+      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    } else if (diffMinutes <= 15) {
+      derivedStatus = 1; // Đúng giờ
+      timeNote = 'Đúng giờ';
+    } else if (diffMinutes <= 35) {
+      derivedStatus = 2; // Muộn
+      timeNote = 'Muộn';
+    } else {
+      derivedStatus = 0; // Vắng
+      timeNote = 'Quá thời gian (Vắng)';
     }
 
     let enrolledStudentIds = session.course_class.enrollments.map(
@@ -312,12 +376,12 @@ export class FaceRecognitionService {
         session_id: sessionId,
         student_id: matchResult.studentId!,
         arrival_time: new Date(),
-        status: 1, // Có mặt
+        status: derivedStatus,
         confidence_score: matchResult.similarity,
         is_manual_override: false,
         evidence_url: evidenceUpload.secure_url,
         attendance_method: AttendanceMethod.FACE_ID,
-        note: `Điểm danh tự động bằng Face ID (similarity: ${matchResult.similarity.toFixed(4)})`,
+        note: `Face ID - ${timeNote} (similarity: ${matchResult.similarity.toFixed(4)})`,
       },
       include: {
         student: {
@@ -377,6 +441,41 @@ export class FaceRecognitionService {
 
     if (!session) {
       throw new NotFoundException(`Buổi điểm danh ${sessionId} không tồn tại`);
+    }
+
+    if (!session.date || !session.check_in_time) {
+      throw new BadRequestException('Buổi điểm danh chưa được thiết lập thời gian');
+    }
+
+    const sessionDate = new Date(session.date);
+    const sessionTime = new Date(session.check_in_time);
+    const startDateTime = new Date(
+      sessionDate.getUTCFullYear(),
+      sessionDate.getUTCMonth(),
+      sessionDate.getUTCDate(),
+      sessionTime.getUTCHours(),
+      sessionTime.getUTCMinutes(),
+      sessionTime.getUTCSeconds()
+    );
+
+    const now = new Date();
+    const diffMs = now.getTime() - startDateTime.getTime();
+    const diffMinutes = diffMs / 1000 / 60;
+
+    let derivedStatus = 1;
+    let timeNote = '';
+
+    if (diffMinutes < 0) {
+      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    } else if (diffMinutes <= 15) {
+      derivedStatus = 1;
+      timeNote = 'Đúng giờ';
+    } else if (diffMinutes <= 35) {
+      derivedStatus = 2;
+      timeNote = 'Muộn';
+    } else {
+      derivedStatus = 0;
+      timeNote = 'Quá thời gian (Vắng)';
     }
 
     const enrolledStudentIds = session.course_class.enrollments.map(
@@ -466,12 +565,12 @@ export class FaceRecognitionService {
               session_id: sessionId,
               student_id: match.studentId!,
               arrival_time: new Date(),
-              status: 1,
+              status: derivedStatus,
               confidence_score: match.similarity,
               is_manual_override: false,
               evidence_url: evidenceUpload.secure_url,
               attendance_method: AttendanceMethod.FACE_ID,
-              note: `Điểm danh tự động (nhóm) - Face #${i + 1} (similarity: ${match.similarity.toFixed(4)})`,
+              note: `Face ID (Nhóm) - ${timeNote} - Face #${i + 1} (similarity: ${match.similarity.toFixed(4)})`,
             },
             include: {
               student: {

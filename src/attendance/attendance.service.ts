@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -34,7 +35,7 @@ export class AttendanceService {
     return this.prisma.attendanceSession.create({
       data: {
         course_class_id: BigInt(dto.course_class_id),
-        check_in_time: dto.check_in_time ? new Date(`1970-01-01T${dto.check_in_time}`) : null,
+        check_in_time: dto.check_in_time ? new Date(`1970-01-01T${dto.check_in_time}Z`) : null,
         date: dto.date ? new Date(dto.date) : null,
       },
     });
@@ -122,7 +123,7 @@ export class AttendanceService {
 
     const data: any = {};
     if (dto.course_class_id) data.course_class_id = BigInt(dto.course_class_id);
-    if (dto.check_in_time) data.check_in_time = new Date(`1970-01-01T${dto.check_in_time}`);
+    if (dto.check_in_time) data.check_in_time = new Date(`1970-01-01T${dto.check_in_time}Z`);
     if (dto.date) data.date = new Date(dto.date);
 
     return this.prisma.attendanceSession.update({
@@ -403,6 +404,140 @@ export class AttendanceService {
     });
 
     return bulkResult;
+  }
+
+  // ===================== AUTO GENERATE SESSIONS =====================
+
+  /**
+   * Tự động sinh các buổi điểm danh cho lớp học phần dựa trên lịch học.
+   * - lesson_slot format: "7:00-9:00" (lấy phần trước dấu "-" làm check_in_time)
+   * - day_of_week: 2=Thứ 2, 3=Thứ 3, ..., 8=Chủ nhật
+   * - Duyệt từng ngày trong khoảng [start_date, end_date], tạo session cho ngày nào khớp day_of_week
+   * @param courseClassId - ID lớp học phần
+   * @param clearExisting - Nếu true, xóa các session cũ chưa có record trước khi tạo mới
+   */
+  async generateSessionsForClass(courseClassId: bigint, clearExisting = false) {
+    const courseClass = await this.prisma.courseClass.findUnique({
+      where: { id: courseClassId },
+    });
+
+    if (!courseClass) {
+      throw new NotFoundException(`Lớp học phần với ID ${courseClassId} không tồn tại`);
+    }
+
+    if (!courseClass.start_date || !courseClass.end_date) {
+      throw new BadRequestException('Lớp học phần chưa có ngày bắt đầu / kết thúc');
+    }
+
+    if (!courseClass.lesson_slot) {
+      throw new BadRequestException('Lớp học phần chưa có thông tin kíp học (lesson_slot)');
+    }
+
+    // Parse check_in_time từ lesson_slot "7:00-9:00" -> "07:00:00"
+    const slotStart = courseClass.lesson_slot.split('-')[0].trim(); // "7:00"
+    const [hourStr, minuteStr] = slotStart.split(':');
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr ?? '0', 10);
+
+    if (isNaN(hour) || isNaN(minute)) {
+      throw new BadRequestException(
+        `Không thể đọc thời gian từ lesson_slot: "${courseClass.lesson_slot}". Định dạng hợp lệ: "7:00-9:00"`,
+      );
+    }
+
+    // Tạo Date object đại diện cho check_in_time theo chuẩn UTC để lưu vào DB chính xác
+    const checkInTime = new Date(Date.UTC(1970, 0, 1, hour, minute, 0));
+
+    // Map day_of_week trong DB (2-8) sang getDay() của JS (0-6)
+    // 2=Thứ 2 -> JS day 1, 3=Thứ 3 -> 2, ..., 7=Thứ 7 -> 6, 8=CN -> 0
+    const dbDayToJsDay: Record<number, number> = {
+      2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 0,
+    };
+    const targetJsDay = dbDayToJsDay[courseClass.day_of_week];
+
+    if (targetJsDay === undefined) {
+      throw new BadRequestException(
+        `Giá trị day_of_week không hợp lệ: ${courseClass.day_of_week}. Hợp lệ: 2-8`,
+      );
+    }
+
+    // Xóa sessions cũ (chưa có record điểm danh) nếu yêu cầu
+    if (clearExisting) {
+      const sessionsWithNoRecords = await this.prisma.attendanceSession.findMany({
+        where: {
+          course_class_id: courseClassId,
+          records: { none: {} },
+        },
+        select: { id: true },
+      });
+
+      if (sessionsWithNoRecords.length > 0) {
+        await this.prisma.attendanceSession.deleteMany({
+          where: {
+            id: { in: sessionsWithNoRecords.map((s) => s.id) },
+          },
+        });
+      }
+    }
+
+    // Lấy danh sách ngày đã có session để tránh tạo trùng
+    const existingSessions = await this.prisma.attendanceSession.findMany({
+      where: { course_class_id: courseClassId },
+      select: { date: true },
+    });
+    const existingDates = new Set(
+      existingSessions
+        .filter((s) => s.date !== null)
+        .map((s) => s.date!.toISOString().split('T')[0]),
+    );
+
+    // Duyệt từng ngày từ start_date đến end_date
+    const sessions: { course_class_id: bigint; date: Date; check_in_time: Date }[] = [];
+    const startDate = new Date(courseClass.start_date);
+    const endDate = new Date(courseClass.end_date);
+
+    // Normalize về UTC midnight để tránh lỗi timezone
+    const current = new Date(
+      Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()),
+    );
+    const end = new Date(
+      Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()),
+    );
+
+    while (current <= end) {
+      if (current.getUTCDay() === targetJsDay) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (!existingDates.has(dateStr)) {
+          sessions.push({
+            course_class_id: courseClassId,
+            date: new Date(current),
+            check_in_time: checkInTime,
+          });
+        }
+      }
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    if (sessions.length === 0) {
+      return {
+        message: 'Không có buổi học nào mới cần tạo (đã tồn tại hoặc không có ngày phù hợp)',
+        created: 0,
+      };
+    }
+
+    await this.prisma.attendanceSession.createMany({
+      data: sessions,
+      skipDuplicates: true,
+    });
+
+    return {
+      message: `Đã tạo thành công ${sessions.length} buổi điểm danh cho lớp học phần`,
+      created: sessions.length,
+      sessions: sessions.map((s) => ({
+        date: s.date.toISOString().split('T')[0],
+        check_in_time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`,
+      })),
+    };
   }
 
   // ===================== STATISTICS =====================

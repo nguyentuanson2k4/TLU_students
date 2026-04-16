@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tlu_backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Uncomment the lines below if you want to use the local PostgreSQL container instead of the remote DB
+    # environment:
+    #   - DATABASE_URL=postgresql://root:secret@postgres_db:5432/tlu_students
+    # depends_on:
+    #   - postgres_db
+
+  # Optional: Local PostgreSQL Database
+  # Uncomment this block if you want an entirely local database for development 
+  # postgres_db:
+  #   image: postgres:15-alpine
+  #   container_name: tlu_postgres
+  #   restart: always
+  #   environment:
+  #     POSTGRES_USER: root
+  #     POSTGRES_PASSWORD: secret
+  #     POSTGRES_DB: tlu_students
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+# volumes:
+#   postgres_data:

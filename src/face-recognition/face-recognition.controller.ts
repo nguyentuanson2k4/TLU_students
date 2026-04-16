@@ -157,6 +157,8 @@ export class FaceRecognitionController {
       file,
       dto.threshold,
       req.user,
+      dto.latitude,
+      dto.longitude,
     );
   }
 
