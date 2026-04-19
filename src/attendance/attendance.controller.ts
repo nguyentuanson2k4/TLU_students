@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import {
@@ -44,6 +45,14 @@ export class AttendanceController {
   @ApiOperation({ summary: 'Lấy danh sách tất cả buổi điểm danh' })
   findAllSessions() {
     return this.attendanceService.findAllSessions();
+  }
+
+  @Get('sessions/me/active')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Lấy các buổi điểm danh trong ngày hôm nay của sinh viên' })
+  getActiveSessionsForStudent(@Req() req: any) {
+    const userId = typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
+    return this.attendanceService.getActiveSessionsForStudent(userId);
   }
 
   @Get('sessions/course-class/:courseClassId')

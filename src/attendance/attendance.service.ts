@@ -62,6 +62,58 @@ export class AttendanceService {
     });
   }
 
+  async getActiveSessionsForStudent(userId: bigint) {
+    const student = await this.prisma.student.findUnique({
+      where: { user_id: userId },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Sinh viên không tồn tại');
+    }
+
+    // Lấy các lớp học phần sinh viên đang học
+    const enrollments = await this.prisma.classEnrollment.findMany({
+      where: { student_id: student.id },
+      select: { course_class_id: true }
+    });
+
+    if (enrollments.length === 0) return [];
+
+    const courseClassIds = enrollments.map(e => e.course_class_id);
+
+    // Xác định ngày hôm nay theo UTC midnight (do ngày điểm danh đang lưu dạng midnight UTC)
+    const now = new Date();
+    const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // Lấy các session của hôm nay
+    const activeSessions = await this.prisma.attendanceSession.findMany({
+      where: {
+        course_class_id: { in: courseClassIds },
+        date: todayMidnightUTC,
+      },
+      include: {
+        course_class: {
+          include: {
+            subject: {
+              select: { subject_code: true, subject_name: true },
+            },
+            lecturer: {
+              select: { lecturer_code: true, full_name: true },
+            },
+          },
+        },
+        // Check xem SV đã điểm danh chưa
+        records: {
+          where: { student_id: student.id },
+          select: { status: true, arrival_time: true },
+        }
+      },
+      orderBy: { check_in_time: 'asc' },
+    });
+
+    return activeSessions;
+  }
+
   async findSessionsByCourseClass(courseClassId: bigint) {
     const courseClass = await this.prisma.courseClass.findUnique({
       where: { id: courseClassId },
