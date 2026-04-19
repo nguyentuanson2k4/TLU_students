@@ -18,11 +18,6 @@ export class CreateCourseClassDto {
   semester_id: number;
 
 
-  @ApiProperty({ description: 'Năm học (VD: 2023-2024)', example: '2023-2024' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(20)
-  academic_year: string;
 
   @ApiProperty({ description: 'Phòng học', example: 'A1-203', required: false })
   @IsOptional()

@@ -14,6 +14,7 @@ export enum NotificationType {
   CLASS = 'class',
   STUDENT_ONLY = 'student_only',
   SYSTEM = 'system',
+  CLASS_REMINDER = 'class_reminder',
 }
 
 export class CreateNotificationDto {

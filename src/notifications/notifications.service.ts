@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
 import {
   CreateNotificationDto,
   NotificationType,
@@ -15,7 +16,10 @@ import { Prisma, Role } from '@prisma/client';
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fcmService: FcmService,
+  ) {}
 
   async sendNotification(
     data: CreateNotificationDto,
@@ -106,6 +110,19 @@ export class NotificationsService {
     this.logger.log(
       `Successfully created ${createdNotifications.count} notifications`,
     );
+
+    // Gửi FCM push notification (async, không block response)
+    const userIds = recipientUserIds.map((id) => Number(id));
+    this.fcmService
+      .sendToUsers(userIds, data.title || '', data.message || '')
+      .then((result) => {
+        this.logger.log(
+          `FCM push sent: ${result.successCount} success, ${result.failureCount} failures`,
+        );
+      })
+      .catch((err) => {
+        this.logger.error(`FCM push failed: ${err.message}`);
+      });
 
     return {
       id: `batch-${Date.now()}`,
