@@ -95,8 +95,8 @@ export class LecturersController {
 
   @Get('my-classes')
   @Roles(Role.LECTURER)
-  @ApiOperation({ 
-    summary: 'Lấy danh sách các lớp học phần được phân công dạy (Lecturer)' 
+  @ApiOperation({
+    summary: 'Lấy danh sách các lớp học phần được phân công dạy (Lecturer)',
   })
   async getMyClasses(@Req() req: any) {
     const userId =

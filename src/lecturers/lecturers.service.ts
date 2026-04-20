@@ -1,9 +1,18 @@
-import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, Degree } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as ExcelJS from 'exceljs';
-import { CreateLecturerDto, UpdateLecturerDto, UpdateLecturerProfileDto } from './dto/lecturer.dto';
+import {
+  CreateLecturerDto,
+  UpdateLecturerDto,
+  UpdateLecturerProfileDto,
+} from './dto/lecturer.dto';
 
 @Injectable()
 export class LecturersService {
@@ -17,7 +26,9 @@ export class LecturersService {
       where: { username },
     });
     if (existingUser) {
-      throw new ConflictException(`Tài khoản với mã giảng viên ${username} đã tồn tại!`);
+      throw new ConflictException(
+        `Tài khoản với mã giảng viên ${username} đã tồn tại!`,
+      );
     }
 
     // Check uniqueness of lecturer_code in lecturers table
@@ -25,7 +36,9 @@ export class LecturersService {
       where: { lecturer_code: data.lecturer_code },
     });
     if (existingLecturer) {
-      throw new ConflictException(`Mã giảng viên ${data.lecturer_code} đã tồn tại!`);
+      throw new ConflictException(
+        `Mã giảng viên ${data.lecturer_code} đã tồn tại!`,
+      );
     }
 
     // Check uniqueness of email
@@ -159,7 +172,10 @@ export class LecturersService {
     };
   }
 
-  async updateProfile(userId: bigint, data: UpdateLecturerProfileDto): Promise<any> {
+  async updateProfile(
+    userId: bigint,
+    data: UpdateLecturerProfileDto,
+  ): Promise<any> {
     const lecturer = await this.prisma.lecturer.findUnique({
       where: { user_id: userId },
     });
@@ -291,7 +307,10 @@ export class LecturersService {
     }
 
     // Expected columns: lecturer_code, password, full_name, department, phone_number, email, major_name, degree
-    const results: { success: any[]; errors: any[] } = { success: [], errors: [] };
+    const results: { success: any[]; errors: any[] } = {
+      success: [],
+      errors: [],
+    };
     const rows: any[] = [];
 
     worksheet.eachRow((row, rowNumber) => {
@@ -310,22 +329,43 @@ export class LecturersService {
         const majorName = values[6]?.toString().trim() || null;
         const degreeRaw = values[7]?.toString().trim().toUpperCase();
 
-        if (!lecturerCode || !fullName || !department || !phoneNumber || !email || !degreeRaw) {
-          results.errors.push({ row: rowNumber, lecturer_code: lecturerCode || 'N/A', error: 'Thiếu thông tin bắt buộc.' });
+        if (
+          !lecturerCode ||
+          !fullName ||
+          !department ||
+          !phoneNumber ||
+          !email ||
+          !degreeRaw
+        ) {
+          results.errors.push({
+            row: rowNumber,
+            lecturer_code: lecturerCode || 'N/A',
+            error: 'Thiếu thông tin bắt buộc.',
+          });
           continue;
         }
 
         // Parse degree
         const degree = Degree[degreeRaw as keyof typeof Degree];
         if (!degree) {
-          results.errors.push({ row: rowNumber, lecturer_code: lecturerCode, error: `Trình độ không hợp lệ: ${degreeRaw}. Chấp nhận: BACHELOR, MASTER, PHD.` });
+          results.errors.push({
+            row: rowNumber,
+            lecturer_code: lecturerCode,
+            error: `Trình độ không hợp lệ: ${degreeRaw}. Chấp nhận: BACHELOR, MASTER, PHD.`,
+          });
           continue;
         }
 
         // Check duplicates
-        const existingUser = await this.prisma.user.findUnique({ where: { username: lecturerCode } });
+        const existingUser = await this.prisma.user.findUnique({
+          where: { username: lecturerCode },
+        });
         if (existingUser) {
-          results.errors.push({ row: rowNumber, lecturer_code: lecturerCode, error: 'Mã giảng viên đã tồn tại trong hệ thống.' });
+          results.errors.push({
+            row: rowNumber,
+            lecturer_code: lecturerCode,
+            error: 'Mã giảng viên đã tồn tại trong hệ thống.',
+          });
           continue;
         }
 
@@ -334,7 +374,11 @@ export class LecturersService {
 
         const created = await this.prisma.$transaction(async (tx) => {
           const newUser = await tx.user.create({
-            data: { username: lecturerCode, password: hashedPassword, role: Role.LECTURER },
+            data: {
+              username: lecturerCode,
+              password: hashedPassword,
+              role: Role.LECTURER,
+            },
           });
 
           const lecturer = await tx.lecturer.create({
@@ -350,7 +394,11 @@ export class LecturersService {
             },
           });
 
-          return { lecturer_code: lecturer.lecturer_code, full_name: lecturer.full_name, email: lecturer.email };
+          return {
+            lecturer_code: lecturer.lecturer_code,
+            full_name: lecturer.full_name,
+            email: lecturer.email,
+          };
         });
 
         results.success.push(created);
