@@ -193,6 +193,68 @@ export class LecturersService {
     };
   }
 
+  async getMyClasses(userId: bigint): Promise<any[]> {
+    // Tìm giảng viên từ user_id
+    const lecturer = await this.prisma.lecturer.findUnique({
+      where: { user_id: userId },
+    });
+
+    if (!lecturer) {
+      throw new NotFoundException('Không tìm thấy hồ sơ giảng viên.');
+    }
+
+    // Lấy tất cả các lớp được phân công dạy
+    const courseClasses = await this.prisma.courseClass.findMany({
+      where: {
+        lecturer_id: lecturer.id,
+      },
+      include: {
+        subject: {
+          select: {
+            id: true,
+            subject_code: true,
+            subject_name: true,
+            credits: true,
+          },
+        },
+        semester: {
+          select: {
+            id: true,
+            semester_name: true,
+            academic_year: true,
+          },
+        },
+        enrollments: {
+          select: {
+            id: true,
+          },
+        },
+      },
+      orderBy: [
+        { semester: { academic_year: 'desc' } },
+        { created_at: 'desc' },
+      ],
+    });
+
+    return courseClasses.map((cc) => ({
+      id: cc.id.toString(),
+      subject: cc.subject,
+      semester: cc.semester,
+      room: cc.room,
+      latitude: cc.latitude,
+      longitude: cc.longitude,
+      allowed_radius: cc.allowed_radius,
+      max_students: cc.max_students,
+      current_students: cc.enrollments.length,
+      day_of_week: cc.day_of_week,
+      lesson_slot: cc.lesson_slot,
+      start_date: cc.start_date,
+      end_date: cc.end_date,
+      created_at: cc.created_at,
+      updated_at: cc.updated_at,
+    }));
+  }
+
   async remove(code: string): Promise<any> {
     const lecturer = await this.prisma.lecturer.findUnique({
       where: { lecturer_code: code },

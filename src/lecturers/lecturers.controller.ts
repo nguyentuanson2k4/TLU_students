@@ -93,6 +93,17 @@ export class LecturersController {
     return this.lecturersService.updateProfile(userId, updateProfileDto);
   }
 
+  @Get('my-classes')
+  @Roles(Role.LECTURER)
+  @ApiOperation({ 
+    summary: 'Lấy danh sách các lớp học phần được phân công dạy (Lecturer)' 
+  })
+  async getMyClasses(@Req() req: any) {
+    const userId =
+      typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
+    return this.lecturersService.getMyClasses(userId);
+  }
+
   @Get(':code')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Lấy thông tin giảng viên theo mã GV (Admin)' })
