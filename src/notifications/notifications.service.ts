@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
+import { NotificationsGateway } from './notifications.gateway';
 import {
   CreateNotificationDto,
   NotificationType,
@@ -19,6 +20,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fcmService: FcmService,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   async sendNotification(
@@ -109,6 +111,24 @@ export class NotificationsService {
 
     this.logger.log(
       `Successfully created ${createdNotifications.count} notifications`,
+    );
+
+    // Gửi realtime WebSocket cho online users
+    const notificationsData = {
+      id: BigInt(0), // Sẽ được cập nhật từ DB
+      title: data.title,
+      message: data.message,
+      notification_type: data.notification_type,
+      source_id: data.source_id ? BigInt(data.source_id) : null,
+      created_at: new Date(),
+    };
+
+    this.notificationsGateway.notifyNewNotification(
+      recipientUserIds,
+      notificationsData as any,
+    );
+    this.logger.log(
+      `WebSocket notification sent to ${recipientUserIds.length} users`,
     );
 
     // Gửi FCM push notification (async, không block response)
@@ -236,10 +256,25 @@ export class NotificationsService {
       );
     }
 
-    return this.prisma.notification.update({
+    const updated = await this.prisma.notification.update({
       where: { id: notiId },
       data: { is_read: true },
     });
+
+    // Emit socket event để cập nhật UI realtime
+    this.notificationsGateway.notifyNotificationDeleted(userId_bi, notiId);
+
+    // Lấy unread count mới và emit badge update
+    const unreadCount = await this.prisma.notification.count({
+      where: { user_id: userId_bi, is_read: false },
+    });
+    this.notificationsGateway.updateUnreadBadge(userId_bi, unreadCount);
+
+    this.logger.log(
+      `Notification ${notificationId} marked as read for user ${userId}`,
+    );
+
+    return updated;
   }
 
   async updateNotification(
@@ -303,6 +338,9 @@ export class NotificationsService {
       `Marked ${result.count} notifications as read for user ${userId}`,
     );
 
+    // Emit socket event để cập nhật badge (unread count = 0)
+    this.notificationsGateway.updateUnreadBadge(id, 0);
+
     return { modifiedCount: result.count };
   }
 
@@ -330,6 +368,17 @@ export class NotificationsService {
     await this.prisma.notification.delete({
       where: { id: notiId },
     });
+
+    // Emit socket event để xóa notification trên UI
+    this.notificationsGateway.notifyNotificationDeleted(userId_bi, notiId);
+
+    // Cập nhật unread count nếu notification chưa read
+    if (!notification.is_read) {
+      const unreadCount = await this.prisma.notification.count({
+        where: { user_id: userId_bi, is_read: false },
+      });
+      this.notificationsGateway.updateUnreadBadge(userId_bi, unreadCount);
+    }
 
     this.logger.log(`Deleted notification ${notificationId}`);
   }
