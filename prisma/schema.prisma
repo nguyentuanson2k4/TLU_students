@@ -167,7 +167,7 @@ model CourseClass {
   room             String?  @db.VarChar(50)
   latitude         Float?
   longitude        Float?
-  allowed_radius   Int?      @default(50)
+  allowed_radius   Int?     @default(50)
   max_students     Int?
   current_students Int?
   day_of_week      Int      @db.SmallInt
@@ -259,11 +259,11 @@ model StudentFace {
 // ===================== ATTENDANCE MODELS =====================
 
 model AttendanceSession {
-  id              BigInt    @id @default(autoincrement())
-  course_class_id    BigInt
-  check_in_time      DateTime? @db.Time
-  date               DateTime? @db.Date
-  is_reminder_sent   Boolean   @default(false)
+  id               BigInt    @id @default(autoincrement())
+  course_class_id  BigInt
+  check_in_time    DateTime? @db.Time
+  date             DateTime? @db.Date
+  is_reminder_sent Boolean   @default(false)
 
   course_class CourseClass @relation(fields: [course_class_id], references: [id])
 
@@ -325,98 +325,36 @@ model ChatMessage {
 
   session ChatSession @relation(fields: [session_id], references: [id])
 
-  // Reverse relations
-  entities ChatEntity[]
-  analyses ChatHistoryAnalysis[]
-
   @@index([session_id])
   @@map("chat_messages")
-}
-
-model ChatIntent {
-  id          BigInt  @id @default(autoincrement())
-  intent_name String? @db.VarChar(255)
-  description String? @db.VarChar(500)
-
-  // Reverse relations
-  analyses     ChatHistoryAnalysis[]
-  templates    SystemResponseTemplate[]
-  workflows    WorkflowMapping[]
-  trainingData AiTrainingDataset[]
-
-  @@map("chat_intents")
-}
-
-model ChatEntity {
-  id           BigInt  @id @default(autoincrement())
-  message_id   BigInt
-  entity_type  String? @db.VarChar(100)
-  entity_value String? @db.VarChar(255)
-
-  message ChatMessage @relation(fields: [message_id], references: [id])
-
-  @@index([message_id])
-  @@map("chat_entities")
-}
-
-model ChatHistoryAnalysis {
-  id               BigInt @id @default(autoincrement())
-  message_id       BigInt
-  confidence_score Float?
-  intent_id        BigInt
-
-  message ChatMessage @relation(fields: [message_id], references: [id])
-  intent  ChatIntent  @relation(fields: [intent_id], references: [id])
-
-  @@index([message_id])
-  @@index([intent_id])
-  @@map("chat_history_analysis")
-}
-
-model SystemResponseTemplate {
-  id            BigInt  @id @default(autoincrement())
-  intent_id     BigInt
-  template_text String? @db.Text
-
-  intent ChatIntent @relation(fields: [intent_id], references: [id])
-
-  @@index([intent_id])
-  @@map("system_response_templates")
-}
-
-model WorkflowMapping {
-  id           BigInt  @id @default(autoincrement())
-  intent_id    BigInt
-  action_name  String? @db.VarChar(100)
-  target_table String? @db.VarChar(100)
-
-  intent ChatIntent @relation(fields: [intent_id], references: [id])
-
-  @@index([intent_id])
-  @@map("workflow_mapping")
 }
 
 model KnowledgeBase {
   id                   BigInt  @id @default(autoincrement())
   document_name        String? @db.VarChar(500)
-  file_path            Bytes?
+  file_path            String? @db.VarChar(500)
   vector_db_collection String? @db.VarChar(100)
   status               Boolean @default(false)
+  created_at           DateTime @default(now())
+
+  // Reverse relations
+  chunks DocumentChunk[]
 
   @@map("knowledge_base")
 }
 
-model AiTrainingDataset {
-  id              BigInt   @id @default(autoincrement())
-  sample_question String?  @db.Text
-  intent_id       BigInt
-  is_active       Boolean  @default(true)
-  created_at      DateTime @default(now())
+model DocumentChunk {
+  id                BigInt                      @id @default(autoincrement())
+  knowledge_base_id BigInt
+  content           String                      @db.Text
+  embedding         Unsupported("vector(3072)")?
+  chunk_index       Int
+  created_at        DateTime                    @default(now())
 
-  intent ChatIntent @relation(fields: [intent_id], references: [id])
+  knowledgeBase KnowledgeBase @relation(fields: [knowledge_base_id], references: [id], onDelete: Cascade)
 
-  @@index([intent_id])
-  @@map("ai_training_dataset")
+  @@index([knowledge_base_id])
+  @@map("document_chunks")
 }
 
 model AiModelConfig {
