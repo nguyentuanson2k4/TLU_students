@@ -11,6 +11,20 @@ datasource db {
 
 // ===================== ENUMS =====================
 
+enum NewsStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum NewsRecipientType {
+  ALL_STUDENTS
+  ALL_LECTURERS
+  SPECIFIC_CLASSES
+  SPECIFIC_MAJORS
+  CUSTOM
+}
+
 enum Role {
   ADMIN
   STUDENT
@@ -76,6 +90,7 @@ model User {
   warningLogs       WarningLog[]
   notifications     Notification[]
   fcmTokens         FcmToken[]
+  newsCreated       News[]             @relation("NewsAuthor")
 
   @@map("users")
 }
@@ -330,11 +345,11 @@ model ChatMessage {
 }
 
 model KnowledgeBase {
-  id                   BigInt  @id @default(autoincrement())
-  document_name        String? @db.VarChar(500)
-  file_path            String? @db.VarChar(500)
-  vector_db_collection String? @db.VarChar(100)
-  status               Boolean @default(false)
+  id                   BigInt   @id @default(autoincrement())
+  document_name        String?  @db.VarChar(500)
+  file_path            String?  @db.VarChar(500)
+  vector_db_collection String?  @db.VarChar(100)
+  status               Boolean  @default(false)
   created_at           DateTime @default(now())
 
   // Reverse relations
@@ -344,12 +359,12 @@ model KnowledgeBase {
 }
 
 model DocumentChunk {
-  id                BigInt                      @id @default(autoincrement())
+  id                BigInt                       @id @default(autoincrement())
   knowledge_base_id BigInt
-  content           String                      @db.Text
+  content           String                       @db.Text
   embedding         Unsupported("vector(3072)")?
   chunk_index       Int
-  created_at        DateTime                    @default(now())
+  created_at        DateTime                     @default(now())
 
   knowledgeBase KnowledgeBase @relation(fields: [knowledge_base_id], references: [id], onDelete: Cascade)
 
@@ -576,4 +591,26 @@ model TuitionPayment {
 
   @@index([tuition_fee_id])
   @@map("tuition_payments")
+}
+
+// ===================== NEWS / ANNOUNCEMENT MODELS =====================
+
+model News {
+  id             BigInt            @id @default(autoincrement())
+  title          String            @db.VarChar(255)
+  content        String            @db.Text
+  author_id      BigInt
+  recipient_type NewsRecipientType @default(ALL_STUDENTS)
+  recipient_ids  String?           @db.Text // JSON array of IDs stored as string
+  status         NewsStatus        @default(DRAFT)
+  published_at   DateTime?
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+
+  author User @relation("NewsAuthor", fields: [author_id], references: [id], onDelete: Cascade)
+
+  @@index([author_id])
+  @@index([status])
+  @@index([published_at])
+  @@map("news")
 }
