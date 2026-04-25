@@ -24,6 +24,8 @@ import { FaceRecognitionModule } from './face-recognition/face-recognition.modul
 import { StatisticsModule } from './statistics/statistics.module';
 import { ReportsModule } from './reports/reports.module';
 import { FcmModule } from './fcm/fcm.module';
+import { ChatModule } from './chat/chat.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -50,6 +52,8 @@ import { FcmModule } from './fcm/fcm.module';
     StatisticsModule,
     ReportsModule,
     FcmModule,
+    ChatModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
