@@ -28,6 +28,16 @@ export class CourseClassesController {
     return this.courseClassesService.createMany(createCourseClassDtos);
   }
 
+  @Post('generate-all-sessions')
+  @Roles(Role.ADMIN)
+  @ApiOperation({
+    summary: 'Sinh buổi điểm danh cho TẤT CẢ lớp học phần đang thiếu',
+    description: 'Dùng để backfill sessions cho các lớp đã tạo trước khi có auto-generate. Chỉ tạo session chưa tồn tại.',
+  })
+  generateAllSessions() {
+    return this.courseClassesService.generateAllSessions();
+  }
+
   @Post(':id/generate-sessions')
   @Roles(Role.ADMIN, Role.LECTURER)
   @ApiOperation({

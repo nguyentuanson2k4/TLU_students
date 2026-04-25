@@ -81,9 +81,9 @@ export class AttendanceService {
 
     const courseClassIds = enrollments.map(e => e.course_class_id);
 
-    // Xác định ngày hôm nay theo UTC midnight (do ngày điểm danh đang lưu dạng midnight UTC)
+    // Xác định ngày hôm nay theo giờ Local của server, nhưng query với mốc midnight UTC để khớp DB
     const now = new Date();
-    const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayMidnightUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
     // Lấy các session của hôm nay
     const activeSessions = await this.prisma.attendanceSession.findMany({
@@ -158,7 +158,15 @@ export class AttendanceService {
       targetSession = nextSession || null;
     }
 
-    return targetSession || null;
+    if (!targetSession) return null;
+
+    // Lấy thống kê tổng hợp (số ngày có mặt, vắng, muộn, có phép) của sinh viên trong lớp này
+    const studentStats = await this.getStudentAttendanceStats(student.id, targetSession.course_class_id);
+
+    return {
+      ...targetSession,
+      student_stats: studentStats.stats,
+    };
   }
 
   async findSessionsByCourseClass(courseClassId: bigint) {
