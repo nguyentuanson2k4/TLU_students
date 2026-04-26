@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FaceRecognitionService } from './face-recognition.service';
-import { RegisterFaceDto, AttendanceFaceDto, VerifyFaceDto } from './dto/face-recognition.dto';
+import { RegisterFaceDto, AttendanceFaceDto } from './dto/face-recognition.dto';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -162,87 +162,5 @@ export class FaceRecognitionController {
     );
   }
 
-  @Post('attendance/:sessionId/group')
-  @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({
-    summary: 'Điểm danh nhóm bằng ảnh lớp (nhiều khuôn mặt) (Roles: ADMIN, LECTURER)',
-    description:
-      'Upload ảnh chụp cả lớp. Hệ thống sẽ nhận diện tất cả khuôn mặt và điểm danh tự động.',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: 'Ảnh chụp nhóm / cả lớp',
-        },
-        threshold: {
-          type: 'number',
-          description: 'Ngưỡng similarity (0-1, mặc định 0.6)',
-        },
-      },
-      required: ['file'],
-    },
-  })
-  @UseInterceptors(FileInterceptor('file'))
-  attendGroupByFace(
-    @Param('sessionId') sessionId: string,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }), // 20MB for group photos
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
-        ],
-      }),
-    )
-    file: Express.Multer.File,
-    @Body() dto: AttendanceFaceDto,
-  ) {
-    return this.faceRecognitionService.recognizeGroupAttendance(
-      BigInt(sessionId),
-      file,
-      dto.threshold,
-    );
-  }
 
-  // ===================== VERIFY =====================
-
-  @Post('verify/:studentId')
-  @Roles(Role.ADMIN, Role.LECTURER, Role.STUDENT)
-  @ApiOperation({
-    summary: 'Xác minh khuôn mặt (chỉ kiểm tra, không điểm danh) (Roles: ADMIN, LECTURER, STUDENT)',
-    description: 'Upload ảnh và kiểm tra xem khuôn mặt có khớp với SV đã đăng ký hay không.',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: 'Ảnh khuôn mặt cần xác minh',
-        },
-      },
-      required: ['file'],
-    },
-  })
-  @UseInterceptors(FileInterceptor('file'))
-  verifyFace(
-    @Param('studentId') studentId: string,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/i }),
-        ],
-      }),
-    )
-    file: Express.Multer.File,
-  ) {
-    return this.faceRecognitionService.verifyFace(BigInt(studentId), file);
-  }
 }

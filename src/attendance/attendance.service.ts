@@ -7,8 +7,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
-  CreateAttendanceSessionDto,
-  UpdateAttendanceSessionDto,
   CreateAttendanceRecordDto,
   UpdateAttendanceRecordDto,
   BulkCreateAttendanceDto,
@@ -23,44 +21,6 @@ export class AttendanceService {
 
   // ===================== ATTENDANCE SESSION =====================
 
-  async createSession(dto: CreateAttendanceSessionDto) {
-    const courseClass = await this.prisma.courseClass.findUnique({
-      where: { id: BigInt(dto.course_class_id) },
-    });
-
-    if (!courseClass) {
-      throw new NotFoundException('Lớp học phần không tồn tại');
-    }
-
-    return this.prisma.attendanceSession.create({
-      data: {
-        course_class_id: BigInt(dto.course_class_id),
-        check_in_time: dto.check_in_time ? new Date(`1970-01-01T${dto.check_in_time}Z`) : null,
-        date: dto.date ? new Date(dto.date) : null,
-      },
-    });
-  }
-
-  async findAllSessions() {
-    return this.prisma.attendanceSession.findMany({
-      include: {
-        course_class: {
-          include: {
-            subject: {
-              select: { subject_code: true, subject_name: true },
-            },
-            lecturer: {
-              select: { lecturer_code: true, full_name: true },
-            },
-          },
-        },
-        _count: {
-          select: { records: true },
-        },
-      },
-      orderBy: { date: 'desc' },
-    });
-  }
 
   async getActiveSessionsForStudent(userId: bigint) {
     const student = await this.prisma.student.findUnique({
@@ -225,32 +185,6 @@ export class AttendanceService {
     return session;
   }
 
-  async updateSession(id: bigint, dto: UpdateAttendanceSessionDto) {
-    await this.findOneSession(id);
-
-    const data: any = {};
-    if (dto.course_class_id) data.course_class_id = BigInt(dto.course_class_id);
-    if (dto.check_in_time) data.check_in_time = new Date(`1970-01-01T${dto.check_in_time}Z`);
-    if (dto.date) data.date = new Date(dto.date);
-
-    return this.prisma.attendanceSession.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async removeSession(id: bigint) {
-    await this.findOneSession(id);
-
-    // Xóa tất cả records liên quan trước khi xóa session
-    await this.prisma.attendanceRecord.deleteMany({
-      where: { session_id: id },
-    });
-
-    return this.prisma.attendanceSession.delete({
-      where: { id },
-    });
-  }
 
   // ===================== ATTENDANCE RECORD =====================
 
@@ -318,30 +252,6 @@ export class AttendanceService {
     return record;
   }
 
-  async findRecordsBySession(sessionId: bigint) {
-    const session = await this.prisma.attendanceSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Buổi điểm danh không tồn tại');
-    }
-
-    return this.prisma.attendanceRecord.findMany({
-      where: { session_id: sessionId },
-      include: {
-        student: {
-          select: {
-            id: true,
-            student_code: true,
-            full_name: true,
-            class_name: true,
-          },
-        },
-      },
-      orderBy: { created_at: 'asc' },
-    });
-  }
 
   async findRecordsByStudent(studentId: bigint) {
     const student = await this.prisma.student.findUnique({
@@ -445,12 +355,6 @@ export class AttendanceService {
     return record;
   }
 
-  async removeRecord(id: bigint) {
-    await this.findOneRecord(id);
-    return this.prisma.attendanceRecord.delete({
-      where: { id },
-    });
-  }
 
   // ===================== BULK ATTENDANCE =====================
 
@@ -649,31 +553,6 @@ export class AttendanceService {
 
   // ===================== STATISTICS =====================
 
-  async getAttendanceStatsBySession(sessionId: bigint) {
-    const session = await this.findOneSession(sessionId);
-
-    const records = await this.prisma.attendanceRecord.findMany({
-      where: { session_id: sessionId },
-    });
-
-    const total = records.length;
-    const present = records.filter((r) => r.status === 1).length;
-    const late = records.filter((r) => r.status === 2).length;
-    const absent = records.filter((r) => r.status === 0).length;
-    const excused = records.filter((r) => r.status === 3).length;
-
-    return {
-      session,
-      stats: {
-        total,
-        present,
-        late,
-        absent,
-        excused,
-        attendance_rate: total > 0 ? ((present + late) / total) * 100 : 0,
-      },
-    };
-  }
 
   async getStudentAttendanceStats(studentId: bigint, courseClassId?: bigint) {
     const student = await this.prisma.student.findUnique({

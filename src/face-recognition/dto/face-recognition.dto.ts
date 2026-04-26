@@ -37,9 +37,3 @@ export class AttendanceFaceDto {
   longitude?: number;
 }
 
-export class VerifyFaceDto {
-  @ApiProperty({ description: 'ID sinh viên cần xác minh', type: Number })
-  @IsNotEmpty()
-  @IsInt()
-  student_id: number;
-}
