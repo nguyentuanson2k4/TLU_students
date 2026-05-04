@@ -49,6 +49,9 @@ export class ClassEnrollmentsService {
         },
       });
 
+      // Auto-calculate tuition fee for this semester
+      await this.recalculateTuitionFee(tx, student_id, courseClass.semester_id);
+
       return enrollment;
     });
   }
@@ -97,7 +100,17 @@ export class ClassEnrollmentsService {
   }
 
   async remove(id: bigint) {
-    const enrollment = await this.findOne(id);
+    const enrollment = await this.prisma.classEnrollment.findUnique({
+      where: { id },
+      include: {
+        course_class: { select: { semester_id: true } },
+      },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException(`Không tìm thấy đăng ký học phần với ID ${id}`);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const deleted = await tx.classEnrollment.delete({
         where: { id },
@@ -112,7 +125,98 @@ export class ClassEnrollmentsService {
         },
       });
 
+      // Recalculate tuition fee after removing enrollment
+      await this.recalculateTuitionFee(tx, enrollment.student_id, enrollment.course_class.semester_id);
+
       return deleted;
     });
+  }
+
+  /**
+   * Tính lại học phí cho sinh viên trong 1 kỳ
+   * Gọi trong transaction sau khi đăng ký/hủy môn
+   */
+  private async recalculateTuitionFee(tx: any, studentId: bigint, semesterId: bigint) {
+    // 1. Lấy tất cả enrollments của SV trong kỳ này
+    const enrollments = await tx.classEnrollment.findMany({
+      where: {
+        student_id: studentId,
+        course_class: { semester_id: semesterId },
+      },
+      include: {
+        course_class: {
+          include: {
+            subject: { select: { credits: true } },
+          },
+        },
+      },
+    });
+
+    // 2. Tính tổng tín chỉ
+    const totalCredits = enrollments.reduce(
+      (sum: number, e: any) => sum + e.course_class.subject.credits,
+      0,
+    );
+
+    // 3. Lấy đơn giá tín chỉ của kỳ
+    const semester = await tx.semester.findUnique({
+      where: { id: semesterId },
+    });
+
+    if (!semester) return;
+
+    const tuitionPerCredit = Number(semester.tuition_per_credit);
+    const totalAmount = totalCredits * tuitionPerCredit;
+
+    // 4. Nếu không còn môn nào → xóa TuitionFee (nếu chưa thanh toán)
+    if (totalCredits === 0) {
+      await tx.tuitionFee.deleteMany({
+        where: {
+          student_id: studentId,
+          semester_id: semesterId,
+          status: 'UNPAID',
+        },
+      });
+      return;
+    }
+
+    // 5. Upsert TuitionFee
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 30);
+
+    // Kiểm tra tuitionFee đã tồn tại chưa
+    const existingFee = await tx.tuitionFee.findUnique({
+      where: {
+        student_id_semester_id: {
+          student_id: studentId,
+          semester_id: semesterId,
+        },
+      },
+    });
+
+    if (existingFee) {
+      // Nếu đã thanh toán rồi thì không update
+      if (existingFee.status === 'PAID') return;
+
+      const discountAmount = Number(existingFee.discount_amount);
+      await tx.tuitionFee.update({
+        where: { id: existingFee.id },
+        data: {
+          total_amount: totalAmount,
+          final_amount: totalAmount - discountAmount,
+        },
+      });
+    } else {
+      await tx.tuitionFee.create({
+        data: {
+          student_id: studentId,
+          semester_id: semesterId,
+          total_amount: totalAmount,
+          discount_amount: 0,
+          final_amount: totalAmount,
+          deadline,
+        },
+      });
+    }
   }
 }

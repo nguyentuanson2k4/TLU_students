@@ -241,7 +241,63 @@ export class StudentsService {
       ],
     });
 
-    return schedules;
+    // Lấy danh sách course_class_id
+    const courseClassIds = schedules.map((s) => s.id);
+
+    // Query 1 lần duy nhất: lấy tất cả attendance records của sinh viên trong các lớp này
+    const attendanceRecords = await this.prisma.attendanceRecord.findMany({
+      where: {
+        student_id: studentId,
+        session: {
+          course_class_id: { in: courseClassIds },
+        },
+      },
+      select: {
+        status: true,
+        session: {
+          select: {
+            course_class_id: true,
+          },
+        },
+      },
+    });
+
+    // Tính stats cho từng course_class
+    const statsMap = new Map<string, { total: number; present: number; late: number; absent: number; excused: number }>();
+
+    for (const record of attendanceRecords) {
+      const classId = record.session.course_class_id.toString();
+      if (!statsMap.has(classId)) {
+        statsMap.set(classId, { total: 0, present: 0, late: 0, absent: 0, excused: 0 });
+      }
+      const stat = statsMap.get(classId)!;
+      stat.total++;
+      if (record.status === 1) stat.present++;
+      else if (record.status === 2) stat.late++;
+      else if (record.status === 0) stat.absent++;
+      else if (record.status === 3) stat.excused++;
+    }
+
+    // Gắn student_stats vào từng schedule
+    return schedules.map((schedule) => {
+      const classId = schedule.id.toString();
+      const stat = statsMap.get(classId) || { total: 0, present: 0, late: 0, absent: 0, excused: 0 };
+      const attendanceRate = stat.total > 0
+        ? Math.round(((stat.present + stat.late) / stat.total) * 100)
+        : 0;
+
+      return {
+        ...schedule,
+        student_stats: {
+          total: stat.total,
+          present: stat.present,
+          late: stat.late,
+          absent: stat.absent,
+          excused: stat.excused,
+          attendance_rate: attendanceRate,
+        },
+      };
+    });
   }
 
   async remove(code: string): Promise<any> {

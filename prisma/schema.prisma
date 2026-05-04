@@ -60,6 +60,18 @@ enum WarningSeverity {
   High
 }
 
+enum TuitionStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
 // ===================== CORE USER MODELS =====================
 
 model User {
@@ -162,9 +174,10 @@ model Subject {
 }
 
 model Semester {
-  id            BigInt @id @default(autoincrement())
-  semester_name String @db.VarChar(50)
-  academic_year String @db.VarChar(20)
+  id                 BigInt  @id @default(autoincrement())
+  semester_name      String  @db.VarChar(50)
+  academic_year      String  @db.VarChar(20)
+  tuition_per_credit Decimal @default(0) @db.Decimal(15, 2) // VND per credit
 
   // Reverse relations
   courseClasses CourseClass[]
@@ -213,7 +226,7 @@ model ClassEnrollment {
   course_class_id BigInt
 
   student      Student     @relation(fields: [student_id], references: [id], onDelete: Cascade)
-  course_class CourseClass @relation(fields: [course_class_id], references: [id])
+  course_class CourseClass @relation(fields: [course_class_id], references: [id], onDelete: Cascade)
 
   // Reverse relations
   grades Grade[]
@@ -280,7 +293,7 @@ model AttendanceSession {
   date             DateTime? @db.Date
   is_reminder_sent Boolean   @default(false)
 
-  course_class CourseClass @relation(fields: [course_class_id], references: [id])
+  course_class CourseClass @relation(fields: [course_class_id], references: [id], onDelete: Cascade)
 
   // Reverse relations
   records AttendanceRecord[]
@@ -303,7 +316,7 @@ model AttendanceRecord {
   note               String?          @db.Text
   created_at         DateTime         @default(now())
 
-  session AttendanceSession @relation(fields: [session_id], references: [id])
+  session AttendanceSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
   student Student           @relation(fields: [student_id], references: [id], onDelete: Cascade)
   updater User?             @relation("AttendanceUpdater", fields: [updated_by], references: [id])
 
@@ -396,7 +409,7 @@ model Post {
   updated_at      DateTime @updatedAt
 
   author       User         @relation(fields: [author_id], references: [id], onDelete: Cascade)
-  course_class CourseClass? @relation(fields: [course_class_id], references: [id])
+  course_class CourseClass? @relation(fields: [course_class_id], references: [id], onDelete: Cascade)
   subject      Subject?     @relation(fields: [subject_id], references: [id])
 
   // Reverse relations
@@ -559,38 +572,33 @@ model FcmToken {
 // ===================== TUITION MODELS =====================
 
 model TuitionFee {
-  id              BigInt   @id @default(autoincrement())
+  id              BigInt        @id @default(autoincrement())
   student_id      BigInt
   semester_id     BigInt
-  total_amount    Decimal  @db.Decimal(15, 2)
-  discount_amount Decimal  @default(0) @db.Decimal(15, 2)
+  total_amount    Decimal       @db.Decimal(15, 2)
+  discount_amount Decimal       @default(0) @db.Decimal(15, 2)
+  final_amount    Decimal       @db.Decimal(15, 2) // total_amount - discount_amount
   deadline        DateTime
-  status          Int      @default(1) @db.SmallInt
+  status          TuitionStatus @default(UNPAID)
+
+  // Payment info (filled after payment)
+  payment_method  String?        @db.VarChar(50) // VNPAY, MOMO, CASH, TRANSFER...
+  transaction_id  String?        @unique @db.VarChar(100)
+  vnp_txn_ref     String?        @unique @db.VarChar(100) // Mã giao dịch gửi lên VNPay
+  payment_status  PaymentStatus?
+  paid_at         DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   student  Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
   semester Semester @relation(fields: [semester_id], references: [id])
 
-  // Reverse relations
-  payments TuitionPayment[]
-
   @@unique([student_id, semester_id])
   @@index([student_id])
   @@index([semester_id])
+  @@index([status])
   @@map("tuition_fees")
-}
-
-model TuitionPayment {
-  id             BigInt   @id @default(autoincrement())
-  tuition_fee_id BigInt
-  amount_paid    Decimal  @db.Decimal(15, 2)
-  payment_method String   @db.VarChar(50)
-  transaction_id String   @unique @db.VarChar(100)
-  payment_date   DateTime @default(now())
-
-  tuitionFee TuitionFee @relation(fields: [tuition_fee_id], references: [id])
-
-  @@index([tuition_fee_id])
-  @@map("tuition_payments")
 }
 
 // ===================== NEWS / ANNOUNCEMENT MODELS =====================
