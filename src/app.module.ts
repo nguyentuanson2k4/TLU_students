@@ -27,6 +27,7 @@ import { FcmModule } from './fcm/fcm.module';
 import { ChatModule } from './chat/chat.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { TuitionModule } from './tuition/tuition.module';
+import { NewsModule } from './news/news.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { TuitionModule } from './tuition/tuition.module';
     ChatModule,
     MessagingModule,
     TuitionModule,
+    NewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
