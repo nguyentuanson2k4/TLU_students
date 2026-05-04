@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsEmail, IsDateString, IsArray, ArrayNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsEmail, IsDateString, IsArray, ArrayNotEmpty, IsNumber, IsBoolean } from 'class-validator';
 import { Gender } from '@prisma/client';
 
 export class CreateStudentDto {
@@ -57,6 +57,11 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   department_name?: string;
+
+  @ApiProperty({ example: 'https://example.com/avatar.jpg', description: 'Ảnh đại diện', required: false })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }
 
 export class UpdateStudentDto {
@@ -104,6 +109,11 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsString()
   department_name?: string;
+
+  @ApiProperty({ required: false, description: 'Ảnh đại diện' })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }
 
 export class UpdateStudentProfileDto {
@@ -121,6 +131,11 @@ export class UpdateStudentProfileDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiProperty({ required: false, description: 'Ảnh đại diện' })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }
 
 export class BulkDeleteStudentsDto {

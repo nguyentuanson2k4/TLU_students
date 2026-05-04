@@ -21,6 +21,13 @@ export class ClassEnrollmentsController {
     return this.classEnrollmentsService.create(createClassEnrollmentDto);
   }
 
+  @Post('bulk')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Đăng ký nhiều lớp học phần (Admin)' })
+  createMany(@Body() createClassEnrollmentDtos: CreateClassEnrollmentDto[]) {
+    return this.classEnrollmentsService.createMany(createClassEnrollmentDtos);
+  }
+
   @Get()
   @Roles(Role.ADMIN, Role.LECTURER)
   @ApiOperation({ summary: 'Lấy danh sách tất cả đăng ký học phần' })

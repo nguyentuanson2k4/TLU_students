@@ -74,6 +74,13 @@ export class CourseClassesController {
     return this.courseClassesService.findOne(BigInt(id));
   }
 
+  @Get(':id/students')
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @ApiOperation({ summary: 'Lấy danh sách sinh viên trong lớp học phần' })
+  getStudentsByClass(@Param('id') id: string) {
+    return this.courseClassesService.getStudentsByClass(BigInt(id));
+  }
+
   @Patch(':id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Cập nhật thông tin lớp học phần (Admin)' })

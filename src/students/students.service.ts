@@ -48,6 +48,7 @@ export class StudentsService {
           username: username,
           password: hashedPassword,
           role: Role.STUDENT,
+          avatar_url: data.avatar_url,
         },
       });
 
@@ -89,6 +90,7 @@ export class StudentsService {
             role: true,
             is_active: true,
             created_at: true,
+            avatar_url: true,
           },
         },
       },
@@ -108,6 +110,7 @@ export class StudentsService {
             role: true,
             is_active: true,
             created_at: true,
+            avatar_url: true,
           },
         },
       },
@@ -129,17 +132,33 @@ export class StudentsService {
       throw new NotFoundException(`Không tìm thấy sinh viên với mã ${code}`);
     }
 
-    const updateData: any = { ...data };
-    if (data.dob) {
-      updateData.dob = new Date(data.dob);
+    const { avatar_url, ...studentData } = data;
+
+    const updateStudentData: any = { ...studentData };
+    if (studentData.dob) {
+      updateStudentData.dob = new Date(studentData.dob);
     }
 
-    const updated = await this.prisma.student.update({
-      where: { student_code: code },
-      data: updateData,
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // Update User if avatar_url is provided
+      if (avatar_url !== undefined) {
+        const userUpdateData: any = {};
+        if (avatar_url !== undefined) userUpdateData.avatar_url = avatar_url;
 
-    return updated;
+        await tx.user.update({
+          where: { id: student.user_id },
+          data: userUpdateData,
+        });
+      }
+
+      // Update Student
+      const updatedStudent = await tx.student.update({
+        where: { student_code: code },
+        data: updateStudentData,
+      });
+
+      return updatedStudent;
+    });
   }
 
   async updateProfile(userId: bigint, data: UpdateStudentProfileDto): Promise<any> {
@@ -161,16 +180,27 @@ export class StudentsService {
       }
     }
 
-    const updated = await this.prisma.student.update({
-      where: { user_id: userId },
-      data: {
-        phone_number: data.phone_number,
-        address: data.address,
-        email: data.email,
-      },
-    });
+    const { avatar_url, ...studentData } = data;
 
-    return updated;
+    return this.prisma.$transaction(async (tx) => {
+      if (avatar_url !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { avatar_url },
+        });
+      }
+
+      const updated = await tx.student.update({
+        where: { user_id: userId },
+        data: {
+          phone_number: studentData.phone_number,
+          address: studentData.address,
+          email: studentData.email,
+        },
+      });
+
+      return updated;
+    });
   }
 
   async getMySchedule(userId: bigint, semesterId?: bigint): Promise<any> {

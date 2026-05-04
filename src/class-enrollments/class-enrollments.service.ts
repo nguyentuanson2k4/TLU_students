@@ -56,6 +56,29 @@ export class ClassEnrollmentsService {
     });
   }
 
+  async createMany(createClassEnrollmentDtos: CreateClassEnrollmentDto[]) {
+    const results: any[] = [];
+    for (const dto of createClassEnrollmentDtos) {
+      try {
+        const result = await this.create(dto);
+        results.push({ success: true, data: result });
+      } catch (error: any) {
+        results.push({
+          success: false,
+          error: error.message,
+          student_id: dto.student_id,
+          course_class_id: dto.course_class_id,
+        });
+      }
+    }
+    return {
+      total: createClassEnrollmentDtos.length,
+      success_count: results.filter(r => r.success).length,
+      error_count: results.filter(r => !r.success).length,
+      results
+    };
+  }
+
   findAll() {
     return this.prisma.classEnrollment.findMany({
       include: {

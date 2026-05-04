@@ -42,6 +42,11 @@ export class CreateLecturerDto {
   @IsEnum(Degree)
   @IsNotEmpty()
   degree!: Degree;
+
+  @ApiProperty({ example: 'https://example.com/avatar.jpg', description: 'Ảnh đại diện', required: false })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }
 
 export class UpdateLecturerDto {
@@ -74,6 +79,11 @@ export class UpdateLecturerDto {
   @IsOptional()
   @IsEnum(Degree)
   degree?: Degree;
+
+  @ApiProperty({ required: false, description: 'Ảnh đại diện' })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }
 
 export class UpdateLecturerProfileDto {
@@ -86,4 +96,9 @@ export class UpdateLecturerProfileDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiProperty({ required: false, description: 'Ảnh đại diện' })
+  @IsOptional()
+  @IsString()
+  avatar_url?: string;
 }

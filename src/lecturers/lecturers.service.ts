@@ -61,6 +61,7 @@ export class LecturersService {
           username: username,
           password: hashedPassword,
           role: Role.LECTURER,
+          avatar_url: data.avatar_url,
         },
       });
 
@@ -100,6 +101,7 @@ export class LecturersService {
             role: true,
             is_active: true,
             created_at: true,
+            avatar_url: true,
           },
         },
       },
@@ -129,6 +131,7 @@ export class LecturersService {
             role: true,
             is_active: true,
             created_at: true,
+            avatar_url: true,
           },
         },
       },
@@ -160,16 +163,27 @@ export class LecturersService {
       throw new NotFoundException(`Không tìm thấy giảng viên với mã ${code}`);
     }
 
-    const updated = await this.prisma.lecturer.update({
-      where: { lecturer_code: code },
-      data,
-    });
+    const { avatar_url, ...lecturerData } = data;
 
-    return {
-      ...updated,
-      id: updated.id.toString(),
-      user_id: updated.user_id.toString(),
-    };
+    return this.prisma.$transaction(async (tx) => {
+      if (avatar_url !== undefined) {
+        await tx.user.update({
+          where: { id: lecturer.user_id },
+          data: { avatar_url },
+        });
+      }
+
+      const updated = await tx.lecturer.update({
+        where: { lecturer_code: code },
+        data: lecturerData,
+      });
+
+      return {
+        ...updated,
+        id: updated.id.toString(),
+        user_id: updated.user_id.toString(),
+      };
+    });
   }
 
   async updateProfile(
@@ -194,19 +208,30 @@ export class LecturersService {
       }
     }
 
-    const updated = await this.prisma.lecturer.update({
-      where: { user_id: userId },
-      data: {
-        phone_number: data.phone_number,
-        email: data.email,
-      },
-    });
+    const { avatar_url, ...lecturerData } = data;
 
-    return {
-      ...updated,
-      id: updated.id.toString(),
-      user_id: updated.user_id.toString(),
-    };
+    return this.prisma.$transaction(async (tx) => {
+      if (avatar_url !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { avatar_url },
+        });
+      }
+
+      const updated = await tx.lecturer.update({
+        where: { user_id: userId },
+        data: {
+          phone_number: lecturerData.phone_number,
+          email: lecturerData.email,
+        },
+      });
+
+      return {
+        ...updated,
+        id: updated.id.toString(),
+        user_id: updated.user_id.toString(),
+      };
+    });
   }
 
   async getMyClasses(userId: bigint): Promise<any[]> {

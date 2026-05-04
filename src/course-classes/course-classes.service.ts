@@ -112,6 +112,40 @@ export class CourseClassesService {
     return courseClass;
   }
 
+  async getStudentsByClass(id: bigint) {
+    await this.findOne(id); // Kiểm tra tồn tại
+
+    const enrollments = await this.prisma.classEnrollment.findMany({
+      where: { course_class_id: id },
+      include: {
+        student: {
+          select: {
+            id: true,
+            student_code: true,
+            full_name: true,
+            class_name: true,
+            phone_number: true,
+            email: true,
+            user: {
+              select: {
+                avatar_url: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return enrollments.map(e => {
+      const { user, ...studentData } = e.student;
+      return {
+        ...studentData,
+        id: studentData.id.toString(),
+        avatar_url: user?.avatar_url || null,
+      };
+    });
+  }
+
   async update(id: bigint, updateCourseClassDto: UpdateCourseClassDto) {
     await this.findOne(id); // Kiểm tra tồn tại
 
