@@ -31,4 +31,4 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main"]
