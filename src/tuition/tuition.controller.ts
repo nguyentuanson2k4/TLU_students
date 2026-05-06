@@ -60,17 +60,21 @@ export class TuitionController {
   createPaymentUrl(@Req() req: any, @Param('tuitionFeeId') tuitionFeeId: string) {
     const userId =
       typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
-    const ipAddr =
+    const rawIp =
       req.headers['x-forwarded-for'] ||
       req.connection?.remoteAddress ||
       req.socket?.remoteAddress ||
       req.ip ||
       '127.0.0.1';
 
+    const ipAddr = typeof rawIp === 'string' 
+      ? rawIp.split(',')[0].trim() 
+      : (Array.isArray(rawIp) ? rawIp[0] : '127.0.0.1');
+
     return this.tuitionService.createPaymentUrl(
       BigInt(tuitionFeeId),
       userId,
-      Array.isArray(ipAddr) ? ipAddr[0] : ipAddr,
+      ipAddr,
     );
   }
 
