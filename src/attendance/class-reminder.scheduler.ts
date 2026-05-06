@@ -22,18 +22,13 @@ export class ClassReminderScheduler {
     // this.logger.debug('Scanning for upcoming classes (15 min reminder)...');
 
     try {
-      // 1. Lấy thời điểm hiện tại và thời gian +15 phút
+      // 1. Lấy thời gian hiện tại và tính toán giờ theo múi giờ Việt Nam (UTC+7)
       const now = new Date();
-      
-      // Chúng ta sẽ so sánh `check_in_time` với giờ UTC theo chuỗi HH:mm
-      // Vì check_in_time lưu theo dạng 1970-01-01T...Z
-      const minStart = new Date(Date.UTC(1970, 0, 1, now.getUTCHours(), now.getUTCMinutes(), 0));
-      
-      // Thêm 15 phút
-      const future = new Date(now.getTime() + 15 * 60 * 1000);
-      const maxStart = new Date(Date.UTC(1970, 0, 1, future.getUTCHours(), future.getUTCMinutes(), 59));
+      // Cộng 7 tiếng vào giờ UTC để biến vnTime chứa các con số khớp với giờ VN
+      // Khi đó vnTime.getUTCHours() sẽ chính là giờ Việt Nam, không phụ thuộc vào timezone của server
+      const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
 
-      // 2. Tìm kiếm session
+      // 2. Tìm kiếm session chưa được nhắc nhở
       const sessions = await this.prisma.attendanceSession.findMany({
         where: {
           is_reminder_sent: false,
@@ -53,9 +48,8 @@ export class ClassReminderScheduler {
         },
       });
 
-      // Do date và check_in_time lưu tách biệt, ta cần filter thủ công một chút 
-      // để xử lý timezone hoặc logic trong code an toàn hơn.
-      const todayDateStr = now.toISOString().split('T')[0];
+      // Lấy chuỗi ngày YYYY-MM-DD chính xác theo giờ Việt Nam
+      const todayDateStr = vnTime.toISOString().split('T')[0];
 
       const upcomingSessions = sessions.filter((session) => {
         // Kiểm tra đúng ngày hôm nay không
@@ -64,28 +58,16 @@ export class ClassReminderScheduler {
           return false;
         }
 
-        // Kiểm tra giờ: có nằm trong khoảng [hiện tại, hiện tại + 15p] không
-        // Chú ý: Cần chuyển cả về phút từ 0:00 để so sánh dễ hơn qua mốc qua ngày
+        // Lấy số phút của giờ bắt đầu (do app lúc lưu dùng getUTCHours() đại diện cho giờ VN)
         const checkInTime = session.check_in_time!;
-        const sessionMinutes = checkInTime.getUTCHours() * 60 + checkInTime.getUTCMinutes();
-        const nowMinutes = now.getHours() * 60 + now.getMinutes(); // dùng local time nếu app lưu local?
-        // Wait, app logic: khi tạo session "7:00-9:00", app lấy parseInt("7"), lưu 1970-01-01T07:00:00Z.
-        // Tức là getUTCHours() của check_in_time khớp với giờ local tại VN theo parse (thay vì timezone).
-        // Let's use getUTCHours()
         const targetMinutes = checkInTime.getUTCHours() * 60 + checkInTime.getUTCMinutes();
         
-        // Thời gian local hiện tại (ví dụ 14:00 ở VN) sẽ là giờ thực.
-        // App lúc parse chuỗi tạo check_in_time là parse theo parseInt("14") r lưu Date.UTC(..., 14,...).
-        // Nên targetMinutes là số phút theo giờ LOCAL của VN.
-        
-        // Bây giờ giờ VN local từ biến 'now':
-        const vnHour = now.getHours(); // Lấy theo múi giờ server, hy vọng server đặt timezone VN!
-        const vnMinute = now.getMinutes();
-        const currentMinutesLocal = vnHour * 60 + vnMinute;
+        // Lấy số phút của thời gian hiện tại theo đúng múi giờ VN (Render không còn bị lỗi UTC nữa)
+        const currentMinutesLocal = vnTime.getUTCHours() * 60 + vnTime.getUTCMinutes();
 
         const diff = targetMinutes - currentMinutesLocal;
 
-        // <= 15 phút và >= 0 phút
+        // Nhắc nhở nếu thời gian còn lại là từ 0 đến 15 phút
         return diff >= 0 && diff <= 15;
       });
 

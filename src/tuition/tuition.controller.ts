@@ -10,7 +10,7 @@ import type { Response } from 'express';
 @ApiTags('Tuition')
 @Controller('tuition')
 export class TuitionController {
-  constructor(private readonly tuitionService: TuitionService) {}
+  constructor(private readonly tuitionService: TuitionService) { }
 
   @Get('me')
   @ApiBearerAuth()
