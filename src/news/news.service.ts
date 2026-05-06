@@ -2,7 +2,6 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
 import { CreateNewsDto, NewsRecipientType } from './dto/create-news.dto';
-import { NotificationType } from '../notifications/dtos/notification.dto';
 
 @Injectable()
 export class NewsService {
@@ -35,44 +34,33 @@ export class NewsService {
       throw new BadRequestException('Không có người nhận tin tức');
     }
 
-    // Tạo notifications trong database
-    const createdNotifications = await this.prisma.notification.createMany({
-      data: recipientUserIds.map((userId) => ({
-        user_id: BigInt(userId),
+    // Tạo News record trong database
+    const createdNews = await this.prisma.news.create({
+      data: {
         title: createNewsDto.title,
-        message: createNewsDto.content,
-        notification_type: NotificationType.NEWS,
-        source_id: BigInt(adminId), // Lưu admin_id để biết ai gửi
-        is_read: false,
-        fcm_sent: false,
-      })),
+        content: createNewsDto.content,
+        author_id: BigInt(adminId),
+        recipient_type: createNewsDto.recipient_type as any,
+        recipient_ids: JSON.stringify(recipientUserIds), // Lưu danh sách ID dưới dạng JSON
+        status: 'PUBLISHED' as any,
+        published_at: new Date(),
+      },
     });
 
-    this.logger.log(
-      `Created ${createdNotifications.count} notifications for news: "${createNewsDto.title}"`,
-    );
+    this.logger.log(`Created news in database with ID: ${createdNews.id}`);
 
     // Gửi FCM push notification (async, không block response)
     this.fcmService
       .sendToUsers(recipientUserIds, createNewsDto.title, createNewsDto.content)
       .then((result) => {
         this.logger.log(
-          `FCM push sent for news: ${result.successCount} success, ${result.failureCount} failures`,
+          `FCM push sent for news ID ${createdNews.id}: ${result.successCount} success, ${result.failureCount} failures`,
         );
-
-        // Update fcm_sent flag
-        this.prisma.notification.updateMany({
-          where: {
-            title: createNewsDto.title,
-            notification_type: NotificationType.NEWS,
-          },
-          data: {
-            fcm_sent: true,
-          },
-        });
       })
       .catch((err) => {
-        this.logger.error(`FCM push failed: ${err.message}`);
+        this.logger.error(
+          `FCM push failed for news ID ${createdNews.id}: ${err.message}`,
+        );
       });
 
     this.logger.log(
@@ -240,74 +228,46 @@ export class NewsService {
   }> {
     const skip = (page - 1) * limit;
 
-    // Lấy notifications có notification_type = 'news' kèm thông tin admin
-    const [notifications, total] = await Promise.all([
-      this.prisma.notification.findMany({
+    // Lấy news records từ bảng News
+    const [newsList, total] = await Promise.all([
+      this.prisma.news.findMany({
         where: {
-          notification_type: NotificationType.NEWS,
+          status: 'PUBLISHED',
         },
-        select: {
-          id: true,
-          title: true,
-          message: true,
-          notification_type: true,
-          source_id: true,
-          is_read: true,
-          fcm_sent: true,
-          created_at: true,
-        },
-        orderBy: {
-          created_at: 'desc',
-        },
-        skip,
-        take: limit,
-      }),
-      this.prisma.notification.count({
-        where: {
-          notification_type: NotificationType.NEWS,
-        },
-      }),
-    ]);
-
-    // Map thêm thông tin admin
-    const newsWithSender = await Promise.all(
-      notifications.map(async (notification) => {
-        let senderInfo: any = null;
-
-        // Nếu có source_id, lấy thông tin admin
-        if (notification.source_id) {
-          const admin = await this.prisma.user.findUnique({
-            where: { id: notification.source_id },
+        include: {
+          author: {
             select: {
               id: true,
               username: true,
               avatar_url: true,
             },
-          });
-
-          // Lấy thêm fullname từ Student
-          if (admin) {
-            const student = await this.prisma.student.findUnique({
-              where: { user_id: notification.source_id },
-              select: { full_name: true },
-            });
-
-            senderInfo = {
-              ...admin,
-              full_name: student?.full_name || admin.username,
-            };
-          }
-        }
-
-        return {
-          ...notification,
-          sender: senderInfo, // Thông tin người gửi
-        };
+          },
+        },
+        orderBy: {
+          published_at: 'desc',
+        },
+        skip,
+        take: limit,
       }),
-    );
+      this.prisma.news.count({
+        where: {
+          status: 'PUBLISHED',
+        },
+      }),
+    ]);
+
+    // Parse recipient_ids từ JSON string
+    const newsWithParsedIds = newsList.map((news) => ({
+      ...news,
+      recipient_ids: news.recipient_ids ? JSON.parse(news.recipient_ids) : [],
+      author: {
+        ...news.author,
+        full_name: news.author.username, // Có thể lấy thêm từ Student nếu cần
+      },
+    }));
 
     return {
-      data: newsWithSender,
+      data: newsWithParsedIds,
       total,
       page,
       limit,
@@ -315,18 +275,19 @@ export class NewsService {
   }
 
   /**
-   * Xóa tin tức (xóa tất cả notification liên quan)
+   * Xóa tin tức
    */
   async deleteNews(newsId: number): Promise<{ message: string }> {
     this.logger.log(`Deleting news with ID: ${newsId}`);
 
-    // Xóa tất cả notification có source_id = newsId
-    await this.prisma.notification.deleteMany({
+    // Xóa News record
+    await this.prisma.news.delete({
       where: {
-        source_id: BigInt(newsId),
-        notification_type: NotificationType.NEWS,
+        id: BigInt(newsId),
       },
     });
+
+    this.logger.log(`News with ID ${newsId} deleted successfully`);
 
     return { message: 'Tin tức đã được xóa' };
   }

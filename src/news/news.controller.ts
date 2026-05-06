@@ -20,6 +20,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { NewsService } from './news.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -45,7 +46,50 @@ export class NewsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Tạo và gửi tin tức mới',
-    description: 'Chỉ ADMIN có thể gửi tin tức',
+    description:
+      'Chỉ ADMIN có thể gửi tin tức tới các nhóm đối tượng khác nhau',
+  })
+  @ApiBody({
+    type: CreateNewsDto,
+    examples: {
+      all_students: {
+        summary: 'Gửi tới tất cả sinh viên',
+        value: {
+          title: 'Thông báo lịch học lại',
+          content:
+            'Từ ngày 1/5/2026, các lớp sẽ bắt đầu học lại tại các phòng máy theo lịch. Sinh viên vui lòng chuẩn bị tài liệu cần thiết.',
+          recipient_type: 'all_students',
+        },
+      },
+      by_class: {
+        summary: 'Gửi tới lớp học phần cụ thể',
+        value: {
+          title: 'Nhắc nhở nộp bài tập',
+          content:
+            'Sinh viên lớp CNTT.KCS101 vui lòng nộp bài tập trước 5/5/2026.',
+          recipient_type: 'by_class',
+          recipient_ids: [1, 2, 3],
+        },
+      },
+      by_faculty: {
+        summary: 'Gửi tới khoa cụ thể',
+        value: {
+          title: 'Thông báo tuyển dụng',
+          content: 'Khoa Công Nghệ Thông Tin tuyển dụng 20 sinh viên thực tập.',
+          recipient_type: 'by_faculty',
+          department_names: ['Khoa CNTT'],
+        },
+      },
+      specific_users: {
+        summary: 'Gửi tới người dùng cụ thể',
+        value: {
+          title: 'Mời tham gia sự kiện',
+          content: 'Bạn được mời tham gia buổi hội thảo về AI vào ngày 10/5.',
+          recipient_type: 'specific_users',
+          recipient_ids: [100, 101, 102],
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
@@ -63,7 +107,12 @@ export class NewsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Dữ liệu không hợp lệ',
+    description:
+      'Dữ liệu không hợp lệ (thiếu field bắt buộc, ID không tồn tại)',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền (chỉ ADMIN mới được phép)',
   })
   async createAndSendNews(
     @Body() createNewsDto: CreateNewsDto,
@@ -84,7 +133,7 @@ export class NewsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Lấy danh sách tin tức',
-    description: 'Lấy danh sách tất cả tin tức đã gửi',
+    description: 'Lấy danh sách tất cả tin tức đã gửi (chỉ status PUBLISHED)',
   })
   @ApiQuery({
     name: 'page',
@@ -112,16 +161,52 @@ export class NewsController {
             {
               id: 1,
               title: 'Thông báo lịch học lại',
-              message: 'Từ ngày 1/5/2026, các lớp sẽ bắt đầu học lại...',
-              created_at: '2026-04-25T10:00:00Z',
+              content:
+                'Từ ngày 1/5/2026, các lớp sẽ bắt đầu học lại tại các phòng máy theo lịch. Sinh viên vui lòng chuẩn bị tài liệu cần thiết.',
+              author_id: 1,
+              recipient_type: 'all_students',
+              recipient_ids: [10, 11, 12, 13, 14, 15],
+              status: 'PUBLISHED',
+              published_at: '2026-04-25T10:30:00Z',
+              created_at: '2026-04-25T10:30:00Z',
+              updated_at: '2026-04-25T10:30:00Z',
+              author: {
+                id: 1,
+                username: 'admin',
+                avatar_url: 'https://example.com/avatar.jpg',
+                full_name: 'Nguyễn Văn A',
+              },
+            },
+            {
+              id: 2,
+              title: 'Nhắc nhở nộp bài tập',
+              content:
+                'Sinh viên lớp CNTT.KCS101 vui lòng nộp bài tập trước 5/5/2026.',
+              author_id: 1,
+              recipient_type: 'by_class',
+              recipient_ids: [1, 2, 3],
+              status: 'PUBLISHED',
+              published_at: '2026-04-24T14:00:00Z',
+              created_at: '2026-04-24T14:00:00Z',
+              updated_at: '2026-04-24T14:00:00Z',
+              author: {
+                id: 1,
+                username: 'admin',
+                avatar_url: 'https://example.com/avatar.jpg',
+                full_name: 'Nguyễn Văn A',
+              },
             },
           ],
-          total: 10,
+          total: 25,
           page: 1,
           limit: 20,
         },
       },
     },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Chưa xác thực (không có token hoặc token không hợp lệ)',
   })
   async getNews(
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
@@ -137,11 +222,12 @@ export class NewsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Xóa tin tức',
-    description: 'Chỉ ADMIN có thể xóa tin tức',
+    description: 'Xóa một tin tức dựa trên ID (chỉ ADMIN có thể)',
   })
   @ApiParam({
     name: 'id',
-    description: 'ID của tin tức',
+    type: 'number',
+    description: 'ID của tin tức cần xóa',
     example: 1,
   })
   @ApiResponse({
@@ -156,6 +242,14 @@ export class NewsController {
         },
       },
     },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Tin tức không tồn tại',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền (chỉ ADMIN mới được phép)',
   })
   async deleteNews(@Param('id', ParseIntPipe) id: number) {
     this.logger.log(`Deleting news with ID: ${id}`);
