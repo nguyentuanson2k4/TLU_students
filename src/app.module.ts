@@ -28,6 +28,7 @@ import { ChatModule } from './chat/chat.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { TuitionModule } from './tuition/tuition.module';
 import { NewsModule } from './news/news.module';
+import { PostsModule } from './posts/posts.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { NewsModule } from './news/news.module';
     MessagingModule,
     TuitionModule,
     NewsModule,
+    PostsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
