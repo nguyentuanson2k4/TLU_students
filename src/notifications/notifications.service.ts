@@ -186,6 +186,19 @@ export class NotificationsService {
           is_read: true,
           created_at: true,
           source_id: true,
+          post: {
+            select: {
+              id: true,
+              title: true,
+              recipient_type: true,
+              course_class: {
+                select: {
+                  id: true,
+                  subject: { select: { subject_name: true } },
+                },
+              },
+            },
+          },
         },
         orderBy: { created_at: 'desc' },
         skip,
@@ -202,6 +215,20 @@ export class NotificationsService {
         ...n,
         id: n.id.toString(),
         source_id: n.source_id?.toString() || null,
+        post: n.post
+          ? {
+              id: n.post.id.toString(),
+              title: n.post.title,
+              recipient_type: n.post.recipient_type,
+              course_class: n.post.course_class
+                ? {
+                    id: n.post.course_class.id.toString(),
+                    subject_name:
+                      n.post.course_class.subject?.subject_name || null,
+                  }
+                : null,
+            }
+          : null,
       })),
       total,
       unreadCount,
@@ -217,6 +244,26 @@ export class NotificationsService {
 
     const notification = await this.prisma.notification.findUnique({
       where: { id: notiId },
+      include: {
+        post: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                username: true,
+                avatar_url: true,
+              },
+            },
+            course_class: {
+              select: {
+                id: true,
+                subject: { select: { subject_name: true } },
+              },
+            },
+            media: true,
+          },
+        },
+      },
     });
 
     if (!notification) {
@@ -229,10 +276,52 @@ export class NotificationsService {
       throw new BadRequestException('Bạn không có quyền xem thông báo này');
     }
 
+    // Tự động đánh dấu đã đọc khi xem chi tiết
+    if (!notification.is_read) {
+      await this.prisma.notification.update({
+        where: { id: notiId },
+        data: { is_read: true },
+      });
+    }
+
     return {
-      ...notification,
       id: notification.id.toString(),
+      title: notification.title,
+      message: notification.message,
+      notification_type: notification.notification_type,
+      is_read: true,
+      created_at: notification.created_at,
       source_id: notification.source_id?.toString() || null,
+      post: notification.post
+        ? {
+            id: notification.post.id.toString(),
+            title: notification.post.title,
+            content: notification.post.content,
+            recipient_type: notification.post.recipient_type,
+            status: notification.post.status,
+            published_at: notification.post.published_at,
+            author: notification.post.author
+              ? {
+                  id: notification.post.author.id.toString(),
+                  username: notification.post.author.username,
+                  avatar_url: notification.post.author.avatar_url,
+                }
+              : null,
+            course_class: notification.post.course_class
+              ? {
+                  id: notification.post.course_class.id.toString(),
+                  subject_name:
+                    notification.post.course_class.subject?.subject_name || null,
+                }
+              : null,
+            media:
+              notification.post.media?.map((m: any) => ({
+                id: m.id.toString(),
+                file_url: m.file_url,
+                file_type: m.file_type,
+              })) || [],
+          }
+        : null,
     };
   }
 

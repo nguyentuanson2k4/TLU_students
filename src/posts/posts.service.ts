@@ -6,18 +6,27 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreatePostDto, UpdatePostDto } from './dto';
-import { Prisma, Role } from '@prisma/client';
+import { FcmService } from '../fcm/fcm.service';
+import { CreatePostDto, PostRecipientType } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class PostsService {
   private readonly logger = new Logger(PostsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fcmService: FcmService,
+  ) {}
+
+  // ===================== TẠO THÔNG BÁO =====================
 
   /**
-   * Tạo bài post mới cho lớp học phần
-   * Chỉ GV của lớp đó mới có thể tạo
+   * Tạo thông báo mới.
+   * - SPECIFIC_CLASSES: GV gửi cho lớp mình dạy, hoặc Admin gửi cho nhiều lớp
+   * - ALL_STUDENTS: Admin gửi cho toàn bộ sinh viên
+   * - BY_DEPARTMENT: Admin gửi cho sinh viên theo khoa
    */
   async createPost(
     data: CreatePostDto,
@@ -25,41 +34,145 @@ export class PostsService {
     userRole: Role,
   ): Promise<any> {
     this.logger.log(
-      `User ${authorId} creating post in class ${data.course_class_id}`,
+      `User ${authorId} creating post [${data.recipient_type}]`,
     );
 
-    // Kiểm tra lớp học phần tồn tại
-    const courseClass = await this.prisma.courseClass.findUnique({
-      where: { id: BigInt(data.course_class_id) },
-      include: { lecturer: true },
-    });
+    let courseClassId: bigint | null = null;
+    let recipientUserIds: number[] = [];
 
-    if (!courseClass) {
-      throw new NotFoundException(
-        `Lớp học phần với ID ${data.course_class_id} không tồn tại`,
-      );
+    switch (data.recipient_type) {
+      case PostRecipientType.SPECIFIC_CLASSES:
+        // GV gửi vào 1 lớp cụ thể
+        if (data.course_class_id) {
+          courseClassId = BigInt(data.course_class_id);
+
+          // Kiểm tra lớp tồn tại
+          const courseClass = await this.prisma.courseClass.findUnique({
+            where: { id: courseClassId },
+            include: { lecturer: true },
+          });
+
+          if (!courseClass) {
+            throw new NotFoundException(
+              `Lớp học phần với ID ${data.course_class_id} không tồn tại`,
+            );
+          }
+
+          // Kiểm tra quyền: Chỉ GV của lớp hoặc ADMIN
+          if (
+            userRole !== Role.ADMIN &&
+            courseClass.lecturer.user_id.toString() !== authorId.toString()
+          ) {
+            throw new ForbiddenException(
+              'Bạn không có quyền đăng thông báo trong lớp này',
+            );
+          }
+
+          // Lấy danh sách SV trong lớp để gửi FCM
+          const enrollments = await this.prisma.classEnrollment.findMany({
+            where: { course_class_id: courseClassId },
+            select: { student: { select: { user_id: true } } },
+          });
+          recipientUserIds = enrollments.map((e) => Number(e.student.user_id));
+
+        } else if (data.recipient_ids && data.recipient_ids.length > 0) {
+          // Admin gửi cho nhiều lớp
+          if (userRole !== Role.ADMIN) {
+            throw new ForbiddenException(
+              'Chỉ Admin mới có thể gửi thông báo cho nhiều lớp cùng lúc',
+            );
+          }
+
+          // Validate tất cả lớp tồn tại
+          const classes = await this.prisma.courseClass.findMany({
+            where: { id: { in: data.recipient_ids.map((id) => BigInt(id)) } },
+          });
+          if (classes.length !== data.recipient_ids.length) {
+            throw new BadRequestException(
+              'Một số ID lớp học phần không tồn tại',
+            );
+          }
+
+          // Lấy SV trong các lớp
+          const enrollments = await this.prisma.classEnrollment.findMany({
+            where: {
+              course_class_id: { in: data.recipient_ids.map((id) => BigInt(id)) },
+              student: { user: { is_active: true } },
+            },
+            select: { student: { select: { user_id: true } } },
+          });
+          recipientUserIds = Array.from(
+            new Set(enrollments.map((e) => Number(e.student.user_id))),
+          );
+        } else {
+          throw new BadRequestException(
+            'Phải cung cấp course_class_id hoặc recipient_ids khi recipient_type = SPECIFIC_CLASSES',
+          );
+        }
+        break;
+
+      case PostRecipientType.ALL_STUDENTS:
+        // Chỉ ADMIN mới được gửi toàn trường
+        if (userRole !== Role.ADMIN) {
+          throw new ForbiddenException(
+            'Chỉ Admin mới có thể gửi thông báo cho toàn bộ sinh viên',
+          );
+        }
+
+        const allStudents = await this.prisma.student.findMany({
+          where: { user: { is_active: true } },
+          select: { user_id: true },
+        });
+        recipientUserIds = allStudents.map((s) => Number(s.user_id));
+        break;
+
+      case PostRecipientType.BY_DEPARTMENT:
+        // Chỉ ADMIN
+        if (userRole !== Role.ADMIN) {
+          throw new ForbiddenException(
+            'Chỉ Admin mới có thể gửi thông báo theo khoa',
+          );
+        }
+        if (!data.department_names || data.department_names.length === 0) {
+          throw new BadRequestException(
+            'department_names là bắt buộc khi recipient_type = BY_DEPARTMENT',
+          );
+        }
+
+        const deptStudents = await this.prisma.student.findMany({
+          where: {
+            department_name: { in: data.department_names },
+            user: { is_active: true },
+          },
+          select: { user_id: true },
+        });
+        recipientUserIds = Array.from(
+          new Set(deptStudents.map((s) => Number(s.user_id))),
+        );
+        break;
+
+      default:
+        throw new BadRequestException(
+          `Loại đối tượng nhận không hợp lệ: ${data.recipient_type}`,
+        );
     }
 
-    // Kiểm tra quyền: Chỉ GV của lớp hoặc ADMIN mới có thể post
-    if (
-      userRole !== Role.ADMIN &&
-      courseClass.lecturer.user_id.toString() !== authorId.toString()
-    ) {
-      throw new ForbiddenException(
-        'Bạn không có quyền post thông báo trong lớp này',
-      );
+    if (recipientUserIds.length === 0) {
+      throw new BadRequestException('Không tìm thấy người nhận thông báo nào');
     }
 
-    // Tạo post
+    // Tạo Post
     const post = await this.prisma.post.create({
       data: {
         author_id: BigInt(authorId),
-        course_class_id: BigInt(data.course_class_id),
+        course_class_id: courseClassId,
         title: data.title,
         content: data.content,
-        post_type: 1, // 1 = announcement
-        created_at: new Date(),
-        updated_at: new Date(),
+        post_type: 1,
+        recipient_type: data.recipient_type as any,
+        recipient_ids: JSON.stringify(recipientUserIds),
+        status: 'PUBLISHED' as any,
+        published_at: new Date(),
       },
       include: {
         author: {
@@ -67,6 +180,12 @@ export class PostsService {
             id: true,
             username: true,
             avatar_url: true,
+          },
+        },
+        course_class: {
+          select: {
+            id: true,
+            subject: { select: { subject_name: true } },
           },
         },
       },
@@ -83,15 +202,54 @@ export class PostsService {
       });
     }
 
-    this.logger.log(`Post created successfully with ID ${post.id}`);
+    // Tạo Notification cho mỗi người nhận (liên kết source_id → post.id)
+    await this.prisma.notification.createMany({
+      data: recipientUserIds.map((userId) => ({
+        user_id: BigInt(userId),
+        title: data.title,
+        message: data.content.length > 200
+          ? data.content.substring(0, 200) + '...'
+          : data.content,
+        notification_type: 'POST',
+        source_id: post.id,
+        is_read: false,
+        fcm_sent: false,
+      })),
+    });
 
-    return this.formatPostResponse(post);
+    this.logger.log(
+      `Created ${recipientUserIds.length} notifications for post ID ${post.id}`,
+    );
+
+    // Gửi FCM push notification (async, không block response)
+    this.fcmService
+      .sendToUsers(recipientUserIds, data.title, data.content)
+      .then((result) => {
+        this.logger.log(
+          `FCM push sent for post ID ${post.id}: ${result.successCount} success, ${result.failureCount} failures`,
+        );
+      })
+      .catch((err) => {
+        this.logger.error(
+          `FCM push failed for post ID ${post.id}: ${err.message}`,
+        );
+      });
+
+    this.logger.log(
+      `Post created with ID ${post.id}, sent to ${recipientUserIds.length} recipients`,
+    );
+
+    return {
+      ...this.formatPostResponse(post),
+      recipientCount: recipientUserIds.length,
+    };
   }
 
+  // ===================== LẤY THÔNG BÁO THEO LỚP =====================
+
   /**
-   * Lấy danh sách posts của một lớp học phần
-   * Sinh viên chỉ xem posts của lớp mình đã đăng ký
-   * GV xem posts của lớp mình dạy
+   * Lấy danh sách thông báo của lớp học phần
+   * SV chỉ xem posts của lớp mình đăng ký, GV xem posts lớp mình dạy
    */
   async getPostsByClass(
     courseClassId: number,
@@ -120,7 +278,6 @@ export class PostsService {
 
     // Kiểm tra quyền truy cập
     if (userRole === Role.STUDENT) {
-      // Sinh viên chỉ xem được posts của lớp mình đã đăng ký
       const enrollment = await this.prisma.classEnrollment.findFirst({
         where: {
           course_class_id: classId,
@@ -134,7 +291,6 @@ export class PostsService {
         );
       }
     } else if (userRole === Role.LECTURER) {
-      // GV chỉ xem được posts của lớp mình dạy
       if (courseClass.lecturer.user_id.toString() !== userId.toString()) {
         throw new ForbiddenException('Bạn không dạy lớp này để xem thông báo');
       }
@@ -143,7 +299,10 @@ export class PostsService {
 
     const [posts, total] = await Promise.all([
       this.prisma.post.findMany({
-        where: { course_class_id: classId },
+        where: {
+          course_class_id: classId,
+          status: 'PUBLISHED',
+        },
         include: {
           author: {
             select: {
@@ -153,18 +312,16 @@ export class PostsService {
             },
           },
           media: true,
-          _count: {
-            select: {
-              interactions: true,
-            },
-          },
         },
         orderBy: { created_at: 'desc' },
         skip,
-        take: Math.min(take, 100), // Max 100
+        take: Math.min(take, 100),
       }),
       this.prisma.post.count({
-        where: { course_class_id: classId },
+        where: {
+          course_class_id: classId,
+          status: 'PUBLISHED',
+        },
       }),
     ]);
 
@@ -176,8 +333,151 @@ export class PostsService {
     };
   }
 
+  // ===================== LẤY THÔNG BÁO TOÀN TRƯỜNG =====================
+
   /**
-   * Lấy chi tiết một bài post
+   * Lấy danh sách thông báo diện rộng (ALL_STUDENTS, BY_DEPARTMENT)
+   * Tất cả user đều có thể xem
+   */
+  async getGlobalPosts(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<any> {
+    const skip = (page - 1) * limit;
+    const safeTake = Math.min(limit, 100);
+
+    const [posts, total] = await Promise.all([
+      this.prisma.post.findMany({
+        where: {
+          recipient_type: { in: ['ALL_STUDENTS', 'BY_DEPARTMENT'] as any[] },
+          status: 'PUBLISHED',
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              username: true,
+              avatar_url: true,
+            },
+          },
+          media: true,
+        },
+        orderBy: { published_at: 'desc' },
+        skip,
+        take: safeTake,
+      }),
+      this.prisma.post.count({
+        where: {
+          recipient_type: { in: ['ALL_STUDENTS', 'BY_DEPARTMENT'] as any[] },
+          status: 'PUBLISHED',
+        },
+      }),
+    ]);
+
+    return {
+      data: posts.map((p) => this.formatPostResponse(p)),
+      total,
+      page,
+      limit: safeTake,
+    };
+  }
+
+  // ===================== LẤY TẤT CẢ THÔNG BÁO DÀNH CHO SV =====================
+
+  /**
+   * Lấy tất cả thông báo dành cho sinh viên hiện tại:
+   * - Các thông báo toàn trường (ALL_STUDENTS)
+   * - Các thông báo theo khoa của SV (BY_DEPARTMENT)
+   * - Các thông báo trong các lớp SV đang đăng ký (SPECIFIC_CLASSES)
+   */
+  async getMyFeed(
+    userId: number,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<any> {
+    const skip = (page - 1) * limit;
+    const safeTake = Math.min(limit, 100);
+
+    // Lấy thông tin sinh viên
+    const student = await this.prisma.student.findFirst({
+      where: { user_id: BigInt(userId) },
+      select: {
+        id: true,
+        department_name: true,
+        enrollments: {
+          select: { course_class_id: true },
+        },
+      },
+    });
+
+    // Build filter conditions
+    const orConditions: any[] = [
+      { recipient_type: 'ALL_STUDENTS' as any },
+    ];
+
+    if (student) {
+      // Thông báo theo khoa
+      if (student.department_name) {
+        // Thông báo BY_DEPARTMENT mà chứa khoa của SV (check recipient_ids)
+        orConditions.push({ recipient_type: 'BY_DEPARTMENT' as any });
+      }
+
+      // Thông báo trong lớp SV đăng ký
+      const classIds = student.enrollments.map((e) => e.course_class_id);
+      if (classIds.length > 0) {
+        orConditions.push({
+          recipient_type: 'SPECIFIC_CLASSES' as any,
+          course_class_id: { in: classIds },
+        });
+      }
+    }
+
+    const [posts, total] = await Promise.all([
+      this.prisma.post.findMany({
+        where: {
+          status: 'PUBLISHED',
+          OR: orConditions,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              username: true,
+              avatar_url: true,
+            },
+          },
+          course_class: {
+            select: {
+              id: true,
+              subject: { select: { subject_name: true } },
+            },
+          },
+          media: true,
+        },
+        orderBy: { published_at: 'desc' },
+        skip,
+        take: safeTake,
+      }),
+      this.prisma.post.count({
+        where: {
+          status: 'PUBLISHED',
+          OR: orConditions,
+        },
+      }),
+    ]);
+
+    return {
+      data: posts.map((p) => this.formatPostResponse(p)),
+      total,
+      page,
+      limit: safeTake,
+    };
+  }
+
+  // ===================== CHI TIẾT THÔNG BÁO =====================
+
+  /**
+   * Lấy chi tiết một bài thông báo
    */
   async getPostDetail(
     postId: number,
@@ -200,48 +500,50 @@ export class PostsService {
           include: { lecturer: true },
         },
         media: true,
-        interactions: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-              },
-            },
-          },
-        },
       },
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài post với ID ${postId} không tồn tại`);
+      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
     }
 
-    // Kiểm tra quyền xem
-    if (userRole === Role.STUDENT && post.course_class) {
-      const enrollment = await this.prisma.classEnrollment.findFirst({
-        where: {
-          course_class_id: post.course_class_id!,
-          student: { user_id: BigInt(userId) },
-        },
-      });
+    // Nếu là post của lớp cụ thể => kiểm tra quyền xem
+    if (
+      post.course_class_id &&
+      post.recipient_type === ('SPECIFIC_CLASSES' as any)
+    ) {
+      if (userRole === Role.STUDENT) {
+        const enrollment = await this.prisma.classEnrollment.findFirst({
+          where: {
+            course_class_id: post.course_class_id,
+            student: { user_id: BigInt(userId) },
+          },
+        });
 
-      if (!enrollment) {
-        throw new ForbiddenException(
-          'Bạn không được đăng ký lớp này để xem thông báo',
-        );
-      }
-    } else if (userRole === Role.LECTURER && post.course_class) {
-      if (post.course_class.lecturer.user_id.toString() !== userId.toString()) {
-        throw new ForbiddenException('Bạn không dạy lớp này để xem thông báo');
+        if (!enrollment) {
+          throw new ForbiddenException(
+            'Bạn không được đăng ký lớp này để xem thông báo',
+          );
+        }
+      } else if (userRole === Role.LECTURER && post.course_class) {
+        if (
+          post.course_class.lecturer.user_id.toString() !== userId.toString()
+        ) {
+          throw new ForbiddenException(
+            'Bạn không dạy lớp này để xem thông báo',
+          );
+        }
       }
     }
+    // Thông báo ALL_STUDENTS / BY_DEPARTMENT => tất cả đều xem được
 
     return this.formatPostResponse(post);
   }
 
+  // ===================== CẬP NHẬT THÔNG BÁO =====================
+
   /**
-   * Cập nhật bài post
+   * Cập nhật bài thông báo
    * Chỉ tác giả hoặc ADMIN mới có thể cập nhật
    */
   async updatePost(
@@ -256,27 +558,18 @@ export class PostsService {
 
     const post = await this.prisma.post.findUnique({
       where: { id },
-      include: {
-        author: {
-          select: {
-            id: true,
-            username: true,
-            avatar_url: true,
-          },
-        },
-      },
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài post với ID ${postId} không tồn tại`);
+      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
     }
 
-    // Kiểm tra quyền: Chỉ tác giả hoặc ADMIN
+    // Kiểm tra quyền
     if (
       userRole !== Role.ADMIN &&
       post.author_id.toString() !== userId.toString()
     ) {
-      throw new ForbiddenException('Bạn không có quyền cập nhật bài post này');
+      throw new ForbiddenException('Bạn không có quyền cập nhật bài thông báo này');
     }
 
     // Cập nhật post
@@ -321,8 +614,10 @@ export class PostsService {
     return this.formatPostResponse(updatedPost);
   }
 
+  // ===================== XÓA THÔNG BÁO =====================
+
   /**
-   * Xóa bài post
+   * Xóa bài thông báo
    * Chỉ tác giả hoặc ADMIN mới có thể xóa
    */
   async deletePost(
@@ -339,39 +634,31 @@ export class PostsService {
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài post với ID ${postId} không tồn tại`);
+      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
     }
 
-    // Kiểm tra quyền: Chỉ tác giả hoặc ADMIN
+    // Kiểm tra quyền
     if (
       userRole !== Role.ADMIN &&
       post.author_id.toString() !== userId.toString()
     ) {
-      throw new ForbiddenException('Bạn không có quyền xóa bài post này');
+      throw new ForbiddenException('Bạn không có quyền xóa bài thông báo này');
     }
 
-    // Xóa media trước
-    await this.prisma.postMedia.deleteMany({
-      where: { post_id: id },
-    });
-
-    // Xóa interactions
-    await this.prisma.postInteraction.deleteMany({
-      where: { post_id: id },
-    });
-
-    // Xóa post
+    // Xóa post (media sẽ tự cascade delete nhờ onDelete: Cascade trong schema)
     await this.prisma.post.delete({
       where: { id },
     });
 
     this.logger.log(`Post ${postId} deleted successfully`);
 
-    return { message: 'Bài post đã được xóa thành công' };
+    return { message: 'Bài thông báo đã được xóa thành công' };
   }
 
+  // ===================== BÀI POST CỦA TÔI =====================
+
   /**
-   * Lấy posts do GV tạo
+   * Lấy danh sách thông báo do GV/Admin tạo
    */
   async getMyPosts(
     userId: number,
@@ -394,14 +681,10 @@ export class PostsService {
           course_class: {
             select: {
               id: true,
+              subject: { select: { subject_name: true } },
             },
           },
           media: true,
-          _count: {
-            select: {
-              interactions: true,
-            },
-          },
         },
         orderBy: { created_at: 'desc' },
         skip,
@@ -420,30 +703,46 @@ export class PostsService {
     };
   }
 
+  // ===================== HELPERS =====================
+
   /**
-   * Helper: Format response
+   * Format response cho post
    */
   private formatPostResponse(post: any): any {
     return {
       id: post.id.toString(),
-      author: post.author,
+      author: post.author
+        ? {
+            id: post.author.id.toString(),
+            username: post.author.username,
+            avatar_url: post.author.avatar_url,
+          }
+        : null,
       title: post.title,
       content: post.content,
+      recipient_type: post.recipient_type,
+      status: post.status,
       course_class_id: post.course_class_id?.toString() || null,
+      course_class: post.course_class
+        ? {
+            id: post.course_class.id.toString(),
+            subject_name: post.course_class.subject?.subject_name || null,
+          }
+        : null,
       media:
         post.media?.map((m: any) => ({
           id: m.id.toString(),
           file_url: m.file_url,
           file_type: m.file_type,
         })) || [],
-      interactions_count: post._count?.interactions || 0,
+      published_at: post.published_at,
       created_at: post.created_at,
       updated_at: post.updated_at,
     };
   }
 
   /**
-   * Helper: Extract file type from URL
+   * Extract file type from URL
    */
   private getFileType(url: string): string {
     const extension = url.split('.').pop()?.toLowerCase() || 'file';

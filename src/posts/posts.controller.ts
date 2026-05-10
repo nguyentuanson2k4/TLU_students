@@ -12,6 +12,7 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,6 +21,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { PostsService } from './posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,9 +29,11 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ResponseMessage } from '../common/decorators/response-message.decorator';
-import { CreatePostDto, UpdatePostDto, PostQueryDto } from './dto';
+import { CreatePostDto, PostRecipientType } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+import { PostQueryDto } from './dto/post-query.dto';
 
-@ApiTags('Posts - Thông Báo Trong Lớp')
+@ApiTags('Posts - Quản Lý Thông Báo')
 @ApiBearerAuth()
 @Controller('posts')
 @UseGuards(JwtAuthGuard)
@@ -38,20 +42,62 @@ export class PostsController {
 
   constructor(private readonly postsService: PostsService) {}
 
-  // ===================== CREATE POST =====================
+  // ===================== TẠO THÔNG BÁO =====================
   @Post()
   @Roles(Role.ADMIN, Role.LECTURER)
   @UseGuards(RolesGuard)
   @ResponseMessage('Tạo thông báo thành công')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'GV/Admin tạo thông báo mới trong lớp học phần',
+    summary: 'Tạo thông báo mới',
     description:
-      'Chỉ giảng viên của lớp đó hoặc admin mới có thể tạo thông báo',
+      'GV tạo thông báo cho lớp mình dạy (SPECIFIC_CLASSES). Admin có thể tạo thông báo cho toàn trường (ALL_STUDENTS), theo khoa (BY_DEPARTMENT), hoặc cho nhiều lớp.',
+  })
+  @ApiBody({
+    type: CreatePostDto,
+    examples: {
+      class_post: {
+        summary: 'GV gửi thông báo cho 1 lớp',
+        value: {
+          title: 'Thông báo về bài tập lớp này',
+          content: 'Các bạn vui lòng nộp bài tập trước 5/5/2026',
+          recipient_type: 'SPECIFIC_CLASSES',
+          course_class_id: 1,
+        },
+      },
+      all_students: {
+        summary: 'Admin gửi thông báo toàn trường',
+        value: {
+          title: 'Thông báo lịch nghỉ lễ',
+          content:
+            'Toàn bộ sinh viên được nghỉ lễ từ ngày 30/4 đến hết ngày 1/5/2026.',
+          recipient_type: 'ALL_STUDENTS',
+        },
+      },
+      by_department: {
+        summary: 'Admin gửi thông báo theo khoa',
+        value: {
+          title: 'Thông báo tuyển dụng thực tập',
+          content:
+            'Khoa CNTT tuyển dụng 20 sinh viên thực tập. Liên hệ văn phòng khoa để biết thêm chi tiết.',
+          recipient_type: 'BY_DEPARTMENT',
+          department_names: ['Khoa CNTT'],
+        },
+      },
+      multi_class: {
+        summary: 'Admin gửi cho nhiều lớp',
+        value: {
+          title: 'Nhắc nhở kiểm tra giữa kỳ',
+          content: 'Sinh viên các lớp chuẩn bị kiểm tra giữa kỳ tuần tới.',
+          recipient_type: 'SPECIFIC_CLASSES',
+          recipient_ids: [1, 2, 3],
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
-    description: 'Thông báo được tạo thành công',
+    description: 'Thông báo được tạo và gửi thành công',
     schema: {
       example: {
         statusCode: 201,
@@ -60,6 +106,8 @@ export class PostsController {
           id: '1',
           title: 'Thông báo về bài tập lớp này',
           content: 'Các bạn vui lòng nộp bài tập trước 5/5/2026',
+          recipient_type: 'SPECIFIC_CLASSES',
+          status: 'PUBLISHED',
           course_class_id: '1',
           author: {
             id: '5',
@@ -67,28 +115,20 @@ export class PostsController {
             avatar_url: 'https://example.com/avatar.jpg',
           },
           media: [],
-          interactions_count: 0,
+          recipientCount: 35,
+          published_at: '2026-05-08T10:00:00Z',
           created_at: '2026-05-08T10:00:00Z',
           updated_at: '2026-05-08T10:00:00Z',
         },
       },
     },
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu không hợp lệ',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Không có quyền - Bạn không dạy lớp này',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Lớp học phần không tồn tại',
-  })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiResponse({ status: 403, description: 'Không có quyền' })
+  @ApiResponse({ status: 404, description: 'Lớp học phần không tồn tại' })
   async createPost(@Body() createPostDto: CreatePostDto, @Request() req: any) {
     this.logger.log(
-      `User ${req.user.username} creating post in class ${createPostDto.course_class_id}`,
+      `User ${req.user.username} creating post [${createPostDto.recipient_type}]`,
     );
 
     const data = await this.postsService.createPost(
@@ -104,14 +144,131 @@ export class PostsController {
     };
   }
 
-  // ===================== GET POSTS BY CLASS =====================
+  // ===================== THÔNG BÁO TOÀN TRƯỜNG =====================
+  @Get('global')
+  @ResponseMessage('Lấy danh sách thông báo toàn trường thành công')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Lấy danh sách thông báo toàn trường',
+    description:
+      'Lấy danh sách thông báo dạng ALL_STUDENTS và BY_DEPARTMENT (đã published)',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Trang số (mặc định: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Số bản ghi mỗi trang (mặc định: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách thông báo toàn trường thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Lấy danh sách thông báo toàn trường thành công',
+        data: {
+          data: [
+            {
+              id: '1',
+              title: 'Thông báo lịch nghỉ lễ',
+              content: 'Toàn bộ sinh viên được nghỉ lễ...',
+              recipient_type: 'ALL_STUDENTS',
+              status: 'PUBLISHED',
+              author: {
+                id: '1',
+                username: 'admin',
+                avatar_url: null,
+              },
+              media: [],
+              published_at: '2026-05-08T10:00:00Z',
+            },
+          ],
+          total: 10,
+          page: 1,
+          limit: 20,
+        },
+      },
+    },
+  })
+  async getGlobalPosts(
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    const data = await this.postsService.getGlobalPosts(
+      page || 1,
+      limit || 20,
+    );
+
+    return {
+      statusCode: 200,
+      message: 'Lấy danh sách thông báo toàn trường thành công',
+      data,
+    };
+  }
+
+  // ===================== BẢNG TIN CỦA SINH VIÊN =====================
+  @Get('feed')
+  @Roles(Role.STUDENT)
+  @UseGuards(RolesGuard)
+  @ResponseMessage('Lấy bảng tin thông báo thành công')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bảng tin thông báo của sinh viên',
+    description:
+      'Lấy tất cả thông báo dành cho sinh viên hiện tại: toàn trường + theo khoa + theo lớp đã đăng ký',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Trang số (mặc định: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Số bản ghi mỗi trang (mặc định: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy bảng tin thành công',
+  })
+  async getMyFeed(
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Request() req?: any,
+  ) {
+    const data = await this.postsService.getMyFeed(
+      req.user.userId || req.user.id,
+      page || 1,
+      limit || 20,
+    );
+
+    return {
+      statusCode: 200,
+      message: 'Lấy bảng tin thông báo thành công',
+      data,
+    };
+  }
+
+  // ===================== THÔNG BÁO THEO LỚP =====================
   @Get('class/:classId')
   @ResponseMessage('Lấy danh sách thông báo thành công')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Lấy danh sách thông báo của lớp học phần',
     description:
-      'Sinh viên xem posts của lớp mình đã đăng ký, GV xem posts của lớp mình dạy',
+      'SV xem posts của lớp mình đã đăng ký, GV xem posts của lớp mình dạy',
   })
   @ApiParam({
     name: 'classId',
@@ -145,6 +302,8 @@ export class PostsController {
               id: '1',
               title: 'Thông báo về bài tập',
               content: 'Nộp bài tập trước 5/5/2026',
+              recipient_type: 'SPECIFIC_CLASSES',
+              status: 'PUBLISHED',
               course_class_id: '1',
               author: {
                 id: '5',
@@ -152,9 +311,6 @@ export class PostsController {
                 avatar_url: null,
               },
               media: [],
-              interactions_count: 2,
-              created_at: '2026-05-08T10:00:00Z',
-              updated_at: '2026-05-08T10:00:00Z',
             },
           ],
           total: 1,
@@ -164,14 +320,8 @@ export class PostsController {
       },
     },
   })
-  @ApiResponse({
-    status: 403,
-    description: 'Không có quyền - Chưa đăng ký lớp hoặc không dạy lớp',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Lớp học phần không tồn tại',
-  })
+  @ApiResponse({ status: 403, description: 'Không có quyền xem lớp này' })
+  @ApiResponse({ status: 404, description: 'Lớp học phần không tồn tại' })
   async getPostsByClass(
     @Param('classId') classId: string,
     @Query() queryDto: PostQueryDto,
@@ -195,7 +345,7 @@ export class PostsController {
     };
   }
 
-  // ===================== GET POST DETAIL =====================
+  // ===================== CHI TIẾT THÔNG BÁO =====================
   @Get(':id')
   @ResponseMessage('Lấy chi tiết thông báo thành công')
   @HttpCode(HttpStatus.OK)
@@ -207,18 +357,9 @@ export class PostsController {
     description: 'ID bài thông báo',
     example: 1,
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy chi tiết thành công',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Không có quyền xem',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Bài thông báo không tồn tại',
-  })
+  @ApiResponse({ status: 200, description: 'Lấy chi tiết thành công' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xem' })
+  @ApiResponse({ status: 404, description: 'Bài thông báo không tồn tại' })
   async getPostDetail(@Param('id') id: string, @Request() req: any) {
     const data = await this.postsService.getPostDetail(
       parseInt(id),
@@ -233,14 +374,14 @@ export class PostsController {
     };
   }
 
-  // ===================== GET MY POSTS =====================
+  // ===================== BÀI CỦA TÔI =====================
   @Get('me/all')
-  @Roles(Role.LECTURER)
+  @Roles(Role.LECTURER, Role.ADMIN)
   @UseGuards(RolesGuard)
   @ResponseMessage('Lấy danh sách thông báo của tôi thành công')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'GV lấy danh sách tất cả thông báo do mình tạo',
+    summary: 'GV/Admin lấy danh sách tất cả thông báo do mình tạo',
   })
   @ApiQuery({
     name: 'skip',
@@ -256,10 +397,7 @@ export class PostsController {
     description: 'Số bản ghi lấy (tối đa: 100)',
     example: 20,
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy danh sách thành công',
-  })
+  @ApiResponse({ status: 200, description: 'Lấy danh sách thành công' })
   async getMyPosts(@Query() queryDto: PostQueryDto, @Request() req: any) {
     const skip = parseInt(queryDto.skip || '0');
     const take = parseInt(queryDto.take || '20');
@@ -277,7 +415,7 @@ export class PostsController {
     };
   }
 
-  // ===================== UPDATE POST =====================
+  // ===================== CẬP NHẬT THÔNG BÁO =====================
   @Patch(':id')
   @Roles(Role.ADMIN, Role.LECTURER)
   @UseGuards(RolesGuard)
@@ -292,18 +430,9 @@ export class PostsController {
     description: 'ID bài thông báo',
     example: 1,
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Cập nhật thành công',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Không có quyền cập nhật',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Bài thông báo không tồn tại',
-  })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
+  @ApiResponse({ status: 403, description: 'Không có quyền cập nhật' })
+  @ApiResponse({ status: 404, description: 'Bài thông báo không tồn tại' })
   async updatePost(
     @Param('id') id: string,
     @Body() updatePostDto: UpdatePostDto,
@@ -323,7 +452,7 @@ export class PostsController {
     };
   }
 
-  // ===================== DELETE POST =====================
+  // ===================== XÓA THÔNG BÁO =====================
   @Delete(':id')
   @Roles(Role.ADMIN, Role.LECTURER)
   @UseGuards(RolesGuard)
@@ -338,18 +467,9 @@ export class PostsController {
     description: 'ID bài thông báo',
     example: 1,
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Xóa thành công',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Không có quyền xóa',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Bài thông báo không tồn tại',
-  })
+  @ApiResponse({ status: 200, description: 'Xóa thành công' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xóa' })
+  @ApiResponse({ status: 404, description: 'Bài thông báo không tồn tại' })
   async deletePost(@Param('id') id: string, @Request() req: any) {
     const data = await this.postsService.deletePost(
       parseInt(id),

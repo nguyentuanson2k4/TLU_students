@@ -11,18 +11,16 @@ datasource db {
 
 // ===================== ENUMS =====================
 
-enum NewsStatus {
+enum PostStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
 }
 
-enum NewsRecipientType {
+enum PostRecipientType {
   ALL_STUDENTS
-  ALL_LECTURERS
   SPECIFIC_CLASSES
-  SPECIFIC_MAJORS
-  CUSTOM
+  BY_DEPARTMENT
 }
 
 enum Role {
@@ -94,7 +92,6 @@ model User {
   attendanceUpdates AttendanceRecord[] @relation("AttendanceUpdater")
   chatSessions      ChatSession[]
   posts             Post[]
-  postInteractions  PostInteraction[]
   conversationsAs1  Conversation[]     @relation("User1Conversations")
   conversationsAs2  Conversation[]     @relation("User2Conversations")
   directMessages    DirectMessage[]
@@ -102,7 +99,6 @@ model User {
   warningLogs       WarningLog[]
   notifications     Notification[]
   fcmTokens         FcmToken[]
-  newsCreated       News[]             @relation("NewsAuthor")
 
   @@map("users")
 }
@@ -168,7 +164,6 @@ model Subject {
 
   // Reverse relations
   courseClasses CourseClass[]
-  posts         Post[]
 
   @@map("subjects")
 }
@@ -395,30 +390,33 @@ model AiModelConfig {
   @@map("ai_model_config")
 }
 
-// ===================== COMMUNITY / POST MODELS =====================
+// ===================== ANNOUNCEMENT / POST MODELS =====================
 
 model Post {
-  id              BigInt   @id @default(autoincrement())
+  id              BigInt            @id @default(autoincrement())
   author_id       BigInt
   course_class_id BigInt?
-  subject_id      BigInt?
-  title           String   @db.VarChar(255)
-  content         String?  @db.Text
-  post_type       Int      @default(1) @db.SmallInt
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  title           String            @db.VarChar(255)
+  content         String?           @db.Text
+  post_type       Int               @default(1) @db.SmallInt
+  recipient_type  PostRecipientType @default(SPECIFIC_CLASSES)
+  recipient_ids   String?           @db.Text // JSON array of IDs (class IDs, etc.)
+  status          PostStatus        @default(PUBLISHED)
+  published_at    DateTime?         @default(now())
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
 
   author       User         @relation(fields: [author_id], references: [id], onDelete: Cascade)
   course_class CourseClass? @relation(fields: [course_class_id], references: [id], onDelete: Cascade)
-  subject      Subject?     @relation(fields: [subject_id], references: [id])
 
   // Reverse relations
-  media        PostMedia[]
-  interactions PostInteraction[]
+  media         PostMedia[]
+  notifications Notification[]
 
   @@index([author_id])
   @@index([course_class_id])
-  @@index([subject_id])
+  @@index([status])
+  @@index([published_at])
   @@map("posts")
 }
 
@@ -428,26 +426,10 @@ model PostMedia {
   file_url  String  @db.VarChar(500)
   file_type String? @db.VarChar(50)
 
-  post Post @relation(fields: [post_id], references: [id])
+  post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
   @@index([post_id])
   @@map("post_media")
-}
-
-model PostInteraction {
-  id         BigInt   @id @default(autoincrement())
-  post_id    BigInt
-  user_id    BigInt
-  type       String?  @db.VarChar(20)
-  created_at DateTime @default(now())
-
-  post Post @relation(fields: [post_id], references: [id])
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@unique([post_id, user_id, type])
-  @@index([post_id])
-  @@index([user_id])
-  @@map("post_interaction")
 }
 
 // ===================== MESSAGING MODELS =====================
@@ -545,9 +527,11 @@ model Notification {
   fcm_sent          Boolean  @default(false)
   created_at        DateTime @default(now())
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post Post? @relation(fields: [source_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
+  @@index([source_id])
   @@map("notifications")
 }
 
@@ -582,11 +566,11 @@ model TuitionFee {
   status          TuitionStatus @default(UNPAID)
 
   // Payment info (filled after payment)
-  payment_method  String?        @db.VarChar(50) // VNPAY, MOMO, CASH, TRANSFER...
-  transaction_id  String?        @unique @db.VarChar(100)
-  vnp_txn_ref     String?        @unique @db.VarChar(100) // Mã giao dịch gửi lên VNPay
-  payment_status  PaymentStatus?
-  paid_at         DateTime?
+  payment_method String?        @db.VarChar(50) // VNPAY, MOMO, CASH, TRANSFER...
+  transaction_id String?        @unique @db.VarChar(100)
+  vnp_txn_ref    String?        @unique @db.VarChar(100) // Mã giao dịch gửi lên VNPay
+  payment_status PaymentStatus?
+  paid_at        DateTime?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -599,26 +583,4 @@ model TuitionFee {
   @@index([semester_id])
   @@index([status])
   @@map("tuition_fees")
-}
-
-// ===================== NEWS / ANNOUNCEMENT MODELS =====================
-
-model News {
-  id             BigInt            @id @default(autoincrement())
-  title          String            @db.VarChar(255)
-  content        String            @db.Text
-  author_id      BigInt
-  recipient_type NewsRecipientType @default(ALL_STUDENTS)
-  recipient_ids  String?           @db.Text // JSON array of IDs stored as string
-  status         NewsStatus        @default(DRAFT)
-  published_at   DateTime?
-  created_at     DateTime          @default(now())
-  updated_at     DateTime          @updatedAt
-
-  author User @relation("NewsAuthor", fields: [author_id], references: [id], onDelete: Cascade)
-
-  @@index([author_id])
-  @@index([status])
-  @@index([published_at])
-  @@map("news")
 }
