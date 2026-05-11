@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
+import { CloudinaryService } from '../face-recognition/cloudinary.service';
 import { CreatePostDto, PostRecipientType } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { Role } from '@prisma/client';
@@ -18,6 +19,7 @@ export class PostsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fcmService: FcmService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   // ===================== TẠO THÔNG BÁO =====================
@@ -33,9 +35,7 @@ export class PostsService {
     authorId: number,
     userRole: Role,
   ): Promise<any> {
-    this.logger.log(
-      `User ${authorId} creating post [${data.recipient_type}]`,
-    );
+    this.logger.log(`User ${authorId} creating post [${data.recipient_type}]`);
 
     let courseClassId: bigint | null = null;
     let recipientUserIds: number[] = [];
@@ -74,7 +74,6 @@ export class PostsService {
             select: { student: { select: { user_id: true } } },
           });
           recipientUserIds = enrollments.map((e) => Number(e.student.user_id));
-
         } else if (data.recipient_ids && data.recipient_ids.length > 0) {
           // Admin gửi cho nhiều lớp
           if (userRole !== Role.ADMIN) {
@@ -96,7 +95,9 @@ export class PostsService {
           // Lấy SV trong các lớp
           const enrollments = await this.prisma.classEnrollment.findMany({
             where: {
-              course_class_id: { in: data.recipient_ids.map((id) => BigInt(id)) },
+              course_class_id: {
+                in: data.recipient_ids.map((id) => BigInt(id)),
+              },
               student: { user: { is_active: true } },
             },
             select: { student: { select: { user_id: true } } },
@@ -207,9 +208,10 @@ export class PostsService {
       data: recipientUserIds.map((userId) => ({
         user_id: BigInt(userId),
         title: data.title,
-        message: data.content.length > 200
-          ? data.content.substring(0, 200) + '...'
-          : data.content,
+        message:
+          data.content.length > 200
+            ? data.content.substring(0, 200) + '...'
+            : data.content,
         notification_type: 'POST',
         source_id: post.id,
         is_read: false,
@@ -339,10 +341,7 @@ export class PostsService {
    * Lấy danh sách thông báo diện rộng (ALL_STUDENTS, BY_DEPARTMENT)
    * Tất cả user đều có thể xem
    */
-  async getGlobalPosts(
-    page: number = 1,
-    limit: number = 20,
-  ): Promise<any> {
+  async getGlobalPosts(page: number = 1, limit: number = 20): Promise<any> {
     const skip = (page - 1) * limit;
     const safeTake = Math.min(limit, 100);
 
@@ -411,9 +410,7 @@ export class PostsService {
     });
 
     // Build filter conditions
-    const orConditions: any[] = [
-      { recipient_type: 'ALL_STUDENTS' as any },
-    ];
+    const orConditions: any[] = [{ recipient_type: 'ALL_STUDENTS' as any }];
 
     if (student) {
       // Thông báo theo khoa
@@ -504,7 +501,9 @@ export class PostsService {
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
+      throw new NotFoundException(
+        `Bài thông báo với ID ${postId} không tồn tại`,
+      );
     }
 
     // Nếu là post của lớp cụ thể => kiểm tra quyền xem
@@ -561,7 +560,9 @@ export class PostsService {
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
+      throw new NotFoundException(
+        `Bài thông báo với ID ${postId} không tồn tại`,
+      );
     }
 
     // Kiểm tra quyền
@@ -569,7 +570,9 @@ export class PostsService {
       userRole !== Role.ADMIN &&
       post.author_id.toString() !== userId.toString()
     ) {
-      throw new ForbiddenException('Bạn không có quyền cập nhật bài thông báo này');
+      throw new ForbiddenException(
+        'Bạn không có quyền cập nhật bài thông báo này',
+      );
     }
 
     // Cập nhật post
@@ -625,23 +628,32 @@ export class PostsService {
     userId: number,
     userRole: Role,
   ): Promise<any> {
-    this.logger.log(`User ${userId} deleting post ${postId}`);
+    this.logger.log(
+      `User ${userId} (role: ${userRole}) attempting to delete post ${postId}`,
+    );
 
     const id = BigInt(postId);
+    const userIdBigInt = BigInt(userId);
 
     const post = await this.prisma.post.findUnique({
       where: { id },
     });
 
     if (!post) {
-      throw new NotFoundException(`Bài thông báo với ID ${postId} không tồn tại`);
+      throw new NotFoundException(
+        `Bài thông báo với ID ${postId} không tồn tại`,
+      );
     }
 
-    // Kiểm tra quyền
-    if (
-      userRole !== Role.ADMIN &&
-      post.author_id.toString() !== userId.toString()
-    ) {
+    // Kiểm tra quyền: ADMIN hoặc tác giả
+    const isAdmin = userRole === Role.ADMIN || String(userRole) === 'ADMIN';
+    const isAuthor = post.author_id === userIdBigInt;
+
+    this.logger.debug(
+      `Permission check: isAdmin=${isAdmin}, isAuthor=${isAuthor}, userRole=${userRole}, authorId=${post.author_id}, userId=${userIdBigInt}`,
+    );
+
+    if (!isAdmin && !isAuthor) {
       throw new ForbiddenException('Bạn không có quyền xóa bài thông báo này');
     }
 
@@ -650,7 +662,7 @@ export class PostsService {
       where: { id },
     });
 
-    this.logger.log(`Post ${postId} deleted successfully`);
+    this.logger.log(`Post ${postId} deleted successfully by user ${userId}`);
 
     return { message: 'Bài thông báo đã được xóa thành công' };
   }
@@ -701,6 +713,114 @@ export class PostsService {
       skip,
       take: Math.min(take, 100),
     };
+  }
+
+  // ===================== UPLOAD FILE MEDIA =====================
+
+  /**
+   * Upload file media cho post lên Cloudinary + lưu vào database
+   * @param file - Multer file object
+   * @param postId - ID của post
+   * @returns Object chứa file_url, file_type, file_name, file_size
+   */
+  async uploadPostMedia(
+    file: Express.Multer.File,
+    postId: number,
+  ): Promise<any> {
+    try {
+      if (!file) {
+        throw new BadRequestException('Không có file được upload');
+      }
+
+      // Validate file size (max 50MB)
+      const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+      if (file.size > MAX_FILE_SIZE) {
+        throw new BadRequestException('Kích thước file vượt quá 50MB');
+      }
+
+      // Validate file type
+      const ALLOWED_MIMETYPES = [
+        // Images
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        // Documents
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        // Archives
+        'application/zip',
+        'application/x-rar-compressed',
+      ];
+
+      if (!ALLOWED_MIMETYPES.includes(file.mimetype)) {
+        throw new BadRequestException(
+          `File type không được hỗ trợ: ${file.mimetype}`,
+        );
+      }
+
+      // Validate post exists
+      const post = await this.prisma.post.findUnique({
+        where: { id: BigInt(postId) },
+      });
+
+      if (!post) {
+        throw new NotFoundException(`Post với ID ${postId} không tồn tại`);
+      }
+
+      // Upload to Cloudinary
+      this.logger.log(`Uploading file ${file.originalname} for post ${postId}`);
+
+      const uploadResult = await this.cloudinaryService.uploadPostMedia(
+        file,
+        postId.toString(),
+      );
+
+      const fileType = this.getFileType(uploadResult.secure_url);
+
+      // Save media to database
+      const savedMedia = await this.prisma.postMedia.create({
+        data: {
+          post_id: BigInt(postId),
+          file_url: uploadResult.secure_url,
+          file_type: fileType,
+        },
+      });
+
+      const response = {
+        id: savedMedia.id.toString(),
+        file_url: savedMedia.file_url,
+        file_type: savedMedia.file_type,
+        original_filename: file.originalname,
+        file_size: file.size,
+        uploaded_at: new Date(),
+      };
+
+      this.logger.log(`File uploaded successfully: ${uploadResult.public_id}`);
+
+      return response;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Failed to upload file: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+
+      throw new BadRequestException(
+        `Upload thất bại: ${(error as Error).message}`,
+      );
+    }
   }
 
   // ===================== HELPERS =====================

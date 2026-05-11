@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { FcmModule } from '../fcm/fcm.module';
 import { ServiceRequestsService } from './service-requests.service';
 import { ServiceRequestNotificationService } from './service-request-notification.service';
 import {
@@ -8,7 +9,7 @@ import {
 } from './controllers';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, FcmModule],
   controllers: [
     StudentServiceRequestsController,
     AdminServiceRequestsController,

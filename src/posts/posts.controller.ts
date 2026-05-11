@@ -13,7 +13,10 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -22,6 +25,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { PostsService } from './posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -144,6 +148,80 @@ export class PostsController {
     };
   }
 
+  // ===================== UPLOAD FILE MEDIA =====================
+  @Post(':postId/upload')
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @UseGuards(RolesGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ResponseMessage('Upload file thành công')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Upload file media cho post',
+    description:
+      'Upload ảnh, PDF, Word, Excel, v.v. cho post. Hỗ trợ file tối đa 50MB.',
+  })
+  @ApiParam({
+    name: 'postId',
+    type: 'number',
+    description: 'ID của post',
+    example: 1,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'File để upload (ảnh, PDF, Word, Excel, etc.). Max: 50MB',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload file thành công',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Upload file thành công',
+        data: {
+          id: 'posts/1/1234567890_file',
+          file_url: 'https://res.cloudinary.com/...',
+          file_type: 'pdf',
+          original_filename: 'document.pdf',
+          file_size: 245678,
+          uploaded_at: '2026-05-11T10:00:00Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Upload thất bại - file không hợp lệ hoặc quá lớn',
+  })
+  @ApiResponse({ status: 404, description: 'Post không tìm thấy' })
+  async uploadPostMedia(
+    @Param('postId', ParseIntPipe) postId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    this.logger.log(
+      `User ${req.user.username} uploading file for post ${postId}`,
+    );
+
+    const data = await this.postsService.uploadPostMedia(file, postId);
+
+    return {
+      statusCode: 200,
+      message: 'Upload file thành công',
+      data,
+    };
+  }
+
   // ===================== THÔNG BÁO TOÀN TRƯỜNG =====================
   @Get('global')
   @ResponseMessage('Lấy danh sách thông báo toàn trường thành công')
@@ -202,10 +280,7 @@ export class PostsController {
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
-    const data = await this.postsService.getGlobalPosts(
-      page || 1,
-      limit || 20,
-    );
+    const data = await this.postsService.getGlobalPosts(page || 1, limit || 20);
 
     return {
       statusCode: 200,

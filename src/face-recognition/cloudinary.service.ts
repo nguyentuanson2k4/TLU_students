@@ -133,7 +133,52 @@ export class CloudinaryService {
         },
         (error, result) => {
           if (error) {
-            this.logger.error(`Cloudinary avatar upload failed: ${error.message}`);
+            this.logger.error(
+              `Cloudinary avatar upload failed: ${error.message}`,
+            );
+            return reject(error);
+          }
+          resolve(result!);
+        },
+      );
+
+      uploadStream.end(file.buffer);
+    });
+  }
+
+  /**
+   * Upload file cho post (hỗ trợ ảnh, PDF, Word, Excel, etc.)
+   * @param file - Multer file object
+   * @param postId - ID của post
+   * @returns Cloudinary upload result
+   */
+  async uploadPostMedia(
+    file: Express.Multer.File,
+    postId: string,
+  ): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      // Determine resource type based on file MIME type
+      const isImage = file.mimetype.startsWith('image/');
+      const resourceType = isImage ? 'image' : 'raw';
+
+      // Get file extension
+      const fileExt = file.originalname.split('.').pop() || 'unknown';
+
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `posts/${postId}`,
+          resource_type: resourceType,
+          public_id: `${Date.now()}_${file.fieldname}`,
+          // Auto optimize images
+          ...(isImage && {
+            transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+          }),
+        },
+        (error, result) => {
+          if (error) {
+            this.logger.error(
+              `Cloudinary post upload failed: ${error.message}`,
+            );
             return reject(error);
           }
           resolve(result!);
