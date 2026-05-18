@@ -26,6 +26,7 @@ import { ReportsModule } from './reports/reports.module';
 import { FcmModule } from './fcm/fcm.module';
 import { ChatModule } from './chat/chat.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { AdminChatModule } from './admin-chat/admin-chat.module';
 import { TuitionModule } from './tuition/tuition.module';
 import { PostsModule } from './posts/posts.module';
 
@@ -56,6 +57,7 @@ import { PostsModule } from './posts/posts.module';
     FcmModule,
     ChatModule,
     MessagingModule,
+    AdminChatModule,
     TuitionModule,
     PostsModule,
   ],

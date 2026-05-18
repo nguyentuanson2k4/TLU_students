@@ -9,8 +9,6 @@ import {
   Request,
   HttpCode,
   HttpStatus,
-  Patch,
-  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,7 +24,6 @@ import { ServiceRequestsService } from '../service-requests.service';
 import {
   CreateServiceRequestDto,
   QueryStudentServiceRequestDto,
-  UpdateServiceRequestDto,
 } from '../dto';
 
 @ApiTags('student/service-requests')
@@ -42,13 +39,13 @@ export class StudentServiceRequestsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Tạo yêu cầu dịch vụ mới',
+    summary: 'Tạo yêu cầu thủ tục 1 cửa mới',
     description:
-      'Sinh viên tạo một yêu cầu dịch vụ mới (xác nhận điểm, làm giấy tờ...)',
+      'Sinh viên gửi yêu cầu thủ tục (chỉ cần loại thủ tục muốn). Admin sẽ duyệt và gửi kết quả về dựa trên loại tài liệu.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Yêu cầu dịch vụ được tạo thành công',
+    description: 'Yêu cầu thủ tục được tạo thành công',
     schema: {
       example: {
         statusCode: 201,
@@ -56,10 +53,10 @@ export class StudentServiceRequestsController {
         data: {
           id: 1,
           document_type_id: 1,
-          student_id: 1,
-          reason: 'Tôi cần xác nhận điểm để làm hồ sơ du học',
-          status: 0,
-          created_at: '2026-04-12T10:00:00Z',
+          document_name: 'Giấy chứng chỉ điểm',
+          processing_days: 3,
+          status: 1,
+          created_at: '2026-05-18T10:00:00Z',
         },
       },
     },
@@ -96,15 +93,21 @@ export class StudentServiceRequestsController {
         data: [
           {
             id: 1,
-            document_type: 'Giấy chứng chỉ điểm',
-            reason: 'Tôi cần xác nhận điểm',
-            status: 0,
-            created_at: '2026-04-12T10:00:00Z',
+            status: 1,
+            created_at: '2026-05-18T10:00:00Z',
+            documentType: {
+              id: 1,
+              document_name: 'Giấy chứng chỉ điểm',
+              processing_days: 3,
+            },
           },
         ],
-        page: 1,
-        limit: 10,
-        total: 1,
+        pagination: {
+          total: 1,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        },
       },
     },
   })
@@ -138,9 +141,8 @@ export class StudentServiceRequestsController {
         data: {
           id: 1,
           document_type: 'Giấy chứng chỉ điểm',
-          reason: 'Tôi cần xác nhận điểm để làm hồ sơ du học',
-          status: 0,
-          created_at: '2026-04-12T10:00:00Z',
+          status: 1,
+          created_at: '2026-05-18T10:00:00Z',
         },
       },
     },
@@ -158,73 +160,5 @@ export class StudentServiceRequestsController {
       message: 'Lấy chi tiết yêu cầu dịch vụ thành công',
       data,
     };
-  }
-
-  @Patch(':id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Cập nhật yêu cầu dịch vụ',
-    description:
-      'Cập nhật thông tin yêu cầu dịch vụ (chỉ PENDING requests có thể sửa)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Yêu cầu dịch vụ được cập nhật thành công',
-    schema: {
-      example: {
-        statusCode: 200,
-        message: 'Yêu cầu dịch vụ được cập nhật thành công',
-        data: {
-          id: 1,
-          reason: 'Cập nhật lý do',
-          attachment_url: 'https://example.com/new-file.pdf',
-          status: 0,
-          created_at: '2026-04-12T10:00:00Z',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu không hợp lệ hoặc request không thể sửa',
-  })
-  @ApiResponse({ status: 403, description: 'Không có quyền truy cập' })
-  @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
-  async update(
-    @Param('id') id: string,
-    @Body() updateDto: UpdateServiceRequestDto,
-    @Request() req,
-  ) {
-    const data = await this.serviceRequestsService.updateServiceRequest(
-      parseInt(id, 10),
-      req.user.id,
-      updateDto,
-    );
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Yêu cầu dịch vụ được cập nhật thành công',
-      data,
-    };
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({
-    summary: 'Xóa yêu cầu dịch vụ',
-    description: 'Xóa yêu cầu dịch vụ (chỉ PENDING requests có thể xóa)',
-  })
-  @ApiResponse({
-    status: 204,
-    description: 'Yêu cầu dịch vụ được xóa thành công',
-  })
-  @ApiResponse({ status: 400, description: 'Request không thể xóa' })
-  @ApiResponse({ status: 403, description: 'Không có quyền truy cập' })
-  @ApiResponse({ status: 404, description: 'Yêu cầu dịch vụ không tìm thấy' })
-  async delete(@Param('id') id: string, @Request() req) {
-    await this.serviceRequestsService.deleteServiceRequest(
-      parseInt(id, 10),
-      req.user.id,
-    );
   }
 }

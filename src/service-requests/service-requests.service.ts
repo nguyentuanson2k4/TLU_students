@@ -27,6 +27,7 @@ export class ServiceRequestsService {
 
   /**
    * Create a new service request for a student
+   * Student only needs to send document_type_id
    */
   async createServiceRequest(
     userId: bigint | number,
@@ -52,8 +53,8 @@ export class ServiceRequestsService {
         data: {
           user_id: userIdBigInt,
           document_type_id: documentTypeId,
-          reason: createDto.reason,
-          attachment_url: createDto.attachment_url || null,
+          reason: null,
+          attachment_url: null,
           status: 1, // PENDING
         },
         include: {
@@ -83,8 +84,6 @@ export class ServiceRequestsService {
         document_type_id: serviceRequest.document_type_id,
         document_name: serviceRequest.documentType?.document_name,
         processing_days: serviceRequest.documentType?.processing_days,
-        reason: serviceRequest.reason,
-        attachment_url: serviceRequest.attachment_url,
         status: serviceRequest.status,
         created_at: serviceRequest.created_at,
       };
@@ -154,8 +153,6 @@ export class ServiceRequestsService {
 
       const mappedData = data.map((item) => ({
         id: item.id,
-        reason: item.reason,
-        attachment_url: item.attachment_url,
         status: item.status,
         created_at: item.created_at,
         documentType: {
@@ -221,8 +218,6 @@ export class ServiceRequestsService {
 
       return {
         id: serviceRequest.id,
-        reason: serviceRequest.reason,
-        attachment_url: serviceRequest.attachment_url,
         status: serviceRequest.status,
         created_at: serviceRequest.created_at,
         documentType: {
