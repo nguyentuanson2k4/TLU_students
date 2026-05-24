@@ -233,13 +233,17 @@ export class FaceRecognitionService {
 
     const sessionDate = new Date(session.date);
     const sessionTime = new Date(session.check_in_time);
+    
+    // Hệ thống lưu getUTCHours() là giờ Việt Nam, nên phải -7 để ra giờ UTC chuẩn
     const startDateTime = new Date(
-      sessionDate.getUTCFullYear(),
-      sessionDate.getUTCMonth(),
-      sessionDate.getUTCDate(),
-      sessionTime.getUTCHours(),
-      sessionTime.getUTCMinutes(),
-      sessionTime.getUTCSeconds()
+      Date.UTC(
+        sessionDate.getUTCFullYear(),
+        sessionDate.getUTCMonth(),
+        sessionDate.getUTCDate(),
+        sessionTime.getUTCHours() - 7,
+        sessionTime.getUTCMinutes(),
+        sessionTime.getUTCSeconds()
+      )
     );
 
     const now = new Date();
@@ -249,8 +253,8 @@ export class FaceRecognitionService {
     let derivedStatus = 1;
     let timeNote = '';
 
-    if (diffMinutes < 0) {
-      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    if (diffMinutes < -30) {
+      throw new BadRequestException('Chưa đến giờ điểm danh (chỉ được điểm danh trước 30 phút)');
     } else if (diffMinutes <= 15) {
       derivedStatus = 1; // Đúng giờ
       timeNote = 'Đúng giờ';
