@@ -378,7 +378,7 @@ export class FaceRecognitionService {
       data: {
         session_id: sessionId,
         student_id: matchResult.studentId!,
-        arrival_time: new Date(),
+        arrival_time: new Date(new Date().getTime() + 7 * 60 * 60 * 1000), // Lưu thẳng giờ VN vào DB
         status: derivedStatus,
         confidence_score: matchResult.similarity,
         is_manual_override: false,
