@@ -114,7 +114,6 @@ export class ClassReminderScheduler {
             message,
             notification_type: NotificationType.CLASS,
             course_class_id: Number(session.course_class_id),
-            source_id: Number(session.id),
           },
           -1, // -1 hoặc 0 cho bot/system id
         );

@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FaceRecognitionService } from './face-recognition.service';
-import { RegisterFaceDto, AttendanceFaceDto } from './dto/face-recognition.dto';
+import { AttendanceFaceDto } from './dto/face-recognition.dto';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -60,10 +60,6 @@ export class FaceRecognitionController {
           format: 'binary',
           description: 'Ảnh khuôn mặt (JPEG/PNG, max 5MB)',
         },
-        note: {
-          type: 'string',
-          description: 'Ghi chú (vd: Ảnh chính diện)',
-        },
       },
       required: ['file'],
     },
@@ -80,12 +76,10 @@ export class FaceRecognitionController {
       }),
     )
     file: Express.Multer.File,
-    @Body() dto: RegisterFaceDto,
   ) {
     return this.faceRecognitionService.registerFace(
       BigInt(studentId),
       file,
-      dto.note,
     );
   }
 
@@ -129,9 +123,13 @@ export class FaceRecognitionController {
           format: 'binary',
           description: 'Ảnh khuôn mặt sinh viên',
         },
-        threshold: {
+        latitude: {
           type: 'number',
-          description: 'Ngưỡng similarity (0-1, mặc định 0.6)',
+          description: 'Vĩ độ (GPS) hiện tại của thiết bị điểm danh',
+        },
+        longitude: {
+          type: 'number',
+          description: 'Kinh độ (GPS) hiện tại của thiết bị điểm danh',
         },
       },
       required: ['file'],
@@ -155,7 +153,6 @@ export class FaceRecognitionController {
     return this.faceRecognitionService.recognizeAndAttend(
       BigInt(sessionId),
       file,
-      dto.threshold,
       req.user,
       dto.latitude,
       dto.longitude,

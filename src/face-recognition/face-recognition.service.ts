@@ -49,7 +49,7 @@ export class FaceRecognitionService {
    * 4. Upload ảnh lên Cloudinary
    * 5. Lưu vào DB (student_faces)
    */
-  async registerFace(studentId: bigint, file: Express.Multer.File, note?: string) {
+  async registerFace(studentId: bigint, file: Express.Multer.File) {
     // 1. Validate sinh viên
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
@@ -190,12 +190,11 @@ export class FaceRecognitionService {
   async recognizeAndAttend(
     sessionId: bigint,
     file: Express.Multer.File,
-    threshold?: number,
     user?: any,
     latitude?: number,
     longitude?: number,
   ) {
-    const similarityThreshold = threshold || DEFAULT_THRESHOLD;
+    const similarityThreshold = DEFAULT_THRESHOLD;
 
     // 1. Validate session
     const session = await this.prisma.attendanceSession.findUnique({

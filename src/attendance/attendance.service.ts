@@ -7,9 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
-  CreateAttendanceRecordDto,
   UpdateAttendanceRecordDto,
-  BulkCreateAttendanceDto,
 } from './dto/attendance.dto';
 
 @Injectable()
@@ -188,70 +186,6 @@ export class AttendanceService {
 
   // ===================== ATTENDANCE RECORD =====================
 
-  async createRecord(dto: CreateAttendanceRecordDto) {
-    const session = await this.prisma.attendanceSession.findUnique({
-      where: { id: BigInt(dto.session_id) },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Buổi điểm danh không tồn tại');
-    }
-
-    const student = await this.prisma.student.findUnique({
-      where: { id: BigInt(dto.student_id) },
-    });
-
-    if (!student) {
-      throw new NotFoundException('Sinh viên không tồn tại');
-    }
-
-    const existing = await this.prisma.attendanceRecord.findUnique({
-      where: {
-        session_id_student_id: {
-          session_id: BigInt(dto.session_id),
-          student_id: BigInt(dto.student_id),
-        },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException('Sinh viên đã được điểm danh trong buổi này');
-    }
-
-    const record = await this.prisma.attendanceRecord.create({
-      data: {
-        session_id: BigInt(dto.session_id),
-        student_id: BigInt(dto.student_id),
-        arrival_time: dto.arrival_time ? new Date(dto.arrival_time) : null,
-        status: dto.status,
-        confidence_score: dto.confidence_score ?? 0,
-        is_manual_override: dto.is_manual_override ?? false,
-        evidence_url: dto.evidence_url,
-        attendance_method: dto.attendance_method ?? 'FACE_ID',
-        updated_by: dto.updated_by ? BigInt(dto.updated_by) : null,
-        note: dto.note,
-      },
-      include: {
-        student: {
-          select: {
-            id: true,
-            student_code: true,
-            full_name: true,
-            class_name: true,
-          },
-        },
-      },
-    });
-
-    // Emit event cho realtime WebSocket
-    this.eventEmitter.emit('attendance.record.created', {
-      sessionId: dto.session_id.toString(),
-      record,
-    });
-
-    return record;
-  }
-
 
   async findRecordsByStudent(studentId: bigint) {
     const student = await this.prisma.student.findUnique({
@@ -357,65 +291,6 @@ export class AttendanceService {
 
 
   // ===================== BULK ATTENDANCE =====================
-
-  async bulkCreateRecords(dto: BulkCreateAttendanceDto) {
-    const session = await this.prisma.attendanceSession.findUnique({
-      where: { id: BigInt(dto.session_id) },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Buổi điểm danh không tồn tại');
-    }
-
-    const bulkResult = await this.prisma.$transaction(async (tx) => {
-      const results: any[] = [];
-
-      for (const item of dto.records) {
-        const student = await tx.student.findUnique({
-          where: { id: BigInt(item.student_id) },
-        });
-
-        if (!student) {
-          throw new NotFoundException(`Sinh viên với ID ${item.student_id} không tồn tại`);
-        }
-
-        const record = await tx.attendanceRecord.upsert({
-          where: {
-            session_id_student_id: {
-              session_id: BigInt(dto.session_id),
-              student_id: BigInt(item.student_id),
-            },
-          },
-          update: {
-            status: item.status,
-            note: item.note,
-            attendance_method: item.attendance_method ?? 'MANUAL',
-            is_manual_override: true,
-          },
-          create: {
-            session_id: BigInt(dto.session_id),
-            student_id: BigInt(item.student_id),
-            status: item.status,
-            note: item.note,
-            attendance_method: item.attendance_method ?? 'MANUAL',
-            is_manual_override: true,
-          },
-        });
-
-        results.push(record);
-      }
-
-      return results;
-    });
-
-    // Emit event cho realtime WebSocket (sau khi transaction hoàn tất)
-    this.eventEmitter.emit('attendance.records.bulk_created', {
-      sessionId: dto.session_id.toString(),
-      records: bulkResult,
-    });
-
-    return bulkResult;
-  }
 
   // ===================== AUTO GENERATE SESSIONS =====================
 
