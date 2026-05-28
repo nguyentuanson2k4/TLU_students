@@ -22,16 +22,19 @@ export class KnowledgeBaseService {
    * Upload tài liệu, trích xuất text, tách chunks, tạo embeddings, lưu vào DB
    */
   async uploadDocument(file: Express.Multer.File): Promise<any> {
-    const ext = path.extname(file.originalname).toLowerCase();
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const ext = path.extname(originalName).toLowerCase();
 
     // Trích xuất text từ file
     let text: string;
     if (ext === '.txt') {
       text = file.buffer.toString('utf-8');
     } else if (ext === '.pdf') {
-      const pdfParse = require('pdf-parse');
-      const pdfData = await pdfParse(file.buffer);
-      text = pdfData.text;
+      const { PDFParse } = require('pdf-parse');
+      const parser = new PDFParse({ data: file.buffer });
+      const result = await parser.getText();
+      await parser.destroy();
+      text = result.text;
     } else {
       throw new Error('Chỉ hỗ trợ file .txt và .pdf');
     }
@@ -39,15 +42,15 @@ export class KnowledgeBaseService {
     // Lưu thông tin tài liệu vào KnowledgeBase
     const knowledgeBase = await this.prisma.knowledgeBase.create({
       data: {
-        document_name: file.originalname,
-        file_path: `/uploads/knowledge/${file.originalname}`,
+        document_name: originalName,
+        file_path: `/uploads/knowledge/${originalName}`,
         status: true,
       },
     });
 
     // Tách text thành chunks
     const chunks = this.splitTextIntoChunks(text);
-    this.logger.log(`Document "${file.originalname}" split into ${chunks.length} chunks`);
+    this.logger.log(`Document "${originalName}" split into ${chunks.length} chunks`);
 
     // Tạo embeddings và lưu từng chunk
     for (let i = 0; i < chunks.length; i++) {
@@ -82,7 +85,7 @@ export class KnowledgeBaseService {
 
     return {
       id: knowledgeBase.id.toString(),
-      document_name: file.originalname,
+      document_name: originalName,
       total_chunks: chunks.length,
       status: true,
     };
