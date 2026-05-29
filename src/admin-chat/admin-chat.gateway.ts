@@ -154,7 +154,7 @@ export class AdminChatGateway
     }
 
     try {
-      const { userId } = userInfo;
+      const { userId, userRole } = userInfo;
       const result = await this.adminChatService.sendMessage(
         BigInt(userId),
         BigInt(data.conversationId),

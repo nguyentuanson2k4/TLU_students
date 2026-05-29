@@ -10,6 +10,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -249,5 +251,52 @@ export class AdminChatController {
     const userId = BigInt(req.user.id);
     const userRole = req.user.role;
     return this.adminChatService.getUnreadCount(userId, userRole);
+  }
+
+  // ===================== SEARCH =====================
+
+  @Get('students/search')
+  @ApiOperation({
+    summary: 'Tìm kiếm sinh viên (Admin only)',
+    description:
+      'Tìm kiếm sinh viên theo tên, student code, hoặc email. Dùng để admin chọn sinh viên để chat.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tìm kiếm sinh viên thành công',
+    schema: {
+      example: [
+        {
+          userId: '5',
+          studentId: '3',
+          fullName: 'Nguyễn Văn A',
+          studentCode: 'SV001',
+          email: 'nguyenvana@student.edu.vn',
+          className: 'K21A',
+          username: 'student001',
+          avatarUrl: null,
+          role: 'STUDENT',
+        },
+      ],
+    },
+  })
+  async searchStudents(
+    @Req() req: any,
+    @Query('query') query: string,
+    @Query('limit') limit?: string,
+  ) {
+    const userRole = req.user.role;
+
+    // Only admin can search students
+    if (userRole !== 'ADMIN') {
+      throw new ForbiddenException('Chỉ admin có thể tìm kiếm sinh viên');
+    }
+
+    if (!query || query.trim().length === 0) {
+      throw new BadRequestException('Vui lòng nhập từ khóa tìm kiếm');
+    }
+
+    const limitNum = limit ? Math.min(parseInt(limit), 50) : 20;
+    return this.adminChatService.searchStudents(query.trim(), limitNum);
   }
 }

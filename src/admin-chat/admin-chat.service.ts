@@ -6,12 +6,16 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
 
 @Injectable()
 export class AdminChatService {
   private readonly logger = new Logger(AdminChatService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fcmService: FcmService,
+  ) {}
 
   /**
    * Lấy danh sách chat giữa admin và sinh viên
@@ -21,18 +25,27 @@ export class AdminChatService {
   async getAdminChats(userId: bigint, userRole: string) {
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        OR: [{ user_id_1: userId }, { user_id_2: userId }],
-        // Filter: một bên phải là ADMIN, bên kia là STUDENT
         AND: [
+          // User phải là thành viên của conversation
           {
-            user1: {
-              role: userRole === 'ADMIN' ? 'STUDENT' : 'ADMIN',
-            },
+            OR: [{ user_id_1: userId }, { user_id_2: userId }],
           },
+          // Một bên ADMIN, bên kia STUDENT
           {
-            user2: {
-              role: userRole === 'ADMIN' ? 'STUDENT' : 'ADMIN',
-            },
+            OR: [
+              {
+                AND: [
+                  { user1: { role: 'ADMIN' } },
+                  { user2: { role: 'STUDENT' } },
+                ],
+              },
+              {
+                AND: [
+                  { user1: { role: 'STUDENT' } },
+                  { user2: { role: 'ADMIN' } },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -444,17 +457,27 @@ export class AdminChatService {
     // Lấy tất cả conversations liên quan
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        OR: [{ user_id_1: userId }, { user_id_2: userId }],
         AND: [
+          // User phải là thành viên của conversation
           {
-            user1: {
-              role: userRole === 'ADMIN' ? 'STUDENT' : 'ADMIN',
-            },
+            OR: [{ user_id_1: userId }, { user_id_2: userId }],
           },
+          // Một bên ADMIN, bên kia STUDENT
           {
-            user2: {
-              role: userRole === 'ADMIN' ? 'STUDENT' : 'ADMIN',
-            },
+            OR: [
+              {
+                AND: [
+                  { user1: { role: 'ADMIN' } },
+                  { user2: { role: 'STUDENT' } },
+                ],
+              },
+              {
+                AND: [
+                  { user1: { role: 'STUDENT' } },
+                  { user2: { role: 'ADMIN' } },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -477,5 +500,150 @@ export class AdminChatService {
     });
 
     return { totalUnread };
+  }
+
+  /**
+   * Gửi notification và FCM khi có tin nhắn mới
+   */
+  async sendMessageNotification(
+    senderUserId: bigint,
+    senderRole: string,
+    recipientUserId: bigint,
+    messageId: bigint,
+    content: string,
+    messageType: string = 'TEXT',
+  ) {
+    try {
+      // Lấy thông tin người gửi
+      const sender = await this.prisma.user.findUnique({
+        where: { id: senderUserId },
+        select: {
+          username: true,
+          student: { select: { full_name: true } },
+          lecturer: { select: { full_name: true } },
+        },
+      });
+
+      if (!sender) {
+        this.logger.warn(
+          `Sender user ${senderUserId} not found for notification`,
+        );
+        return;
+      }
+
+      const senderName =
+        sender.student?.full_name ||
+        sender.lecturer?.full_name ||
+        sender.username;
+
+      const notificationTitle =
+        senderRole === 'ADMIN'
+          ? `Tin nhắn từ ${senderName}`
+          : `${senderName} đã gửi tin nhắn`;
+
+      const notificationBody =
+        messageType === 'TEXT' ? content.substring(0, 100) : `[${messageType}]`;
+
+      // Tạo notification record
+      await this.prisma.notification.create({
+        data: {
+          user_id: recipientUserId,
+          title: notificationTitle,
+          message: notificationBody,
+          notification_type: 'ADMIN_CHAT',
+          source_id: messageId,
+          is_read: false,
+          fcm_sent: false,
+        },
+      });
+
+      // Gửi FCM notification (async)
+      this.fcmService
+        .sendToUser(
+          Number(recipientUserId),
+          notificationTitle,
+          notificationBody,
+          {
+            conversationId: messageId.toString(),
+            messageId: messageId.toString(),
+            senderId: senderUserId.toString(),
+            type: 'admin_chat',
+          },
+        )
+        .then((res) => {
+          if (res.successCount > 0) {
+            // Cập nhật fcm_sent flag
+            this.prisma.notification
+              .updateMany({
+                where: {
+                  user_id: recipientUserId,
+                  source_id: messageId,
+                },
+                data: { fcm_sent: true },
+              })
+              .catch((err: any) =>
+                this.logger.error(
+                  `Failed to update fcm_sent flag: ${err.message}`,
+                ),
+              );
+
+            this.logger.log(
+              `FCM notification sent to user ${recipientUserId} for message ${messageId}`,
+            );
+          }
+        })
+        .catch((err: any) => {
+          this.logger.error(`Failed to send FCM notification: ${err.message}`);
+        });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send message notification: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Tìm kiếm sinh viên (dành cho admin)
+   */
+  async searchStudents(query: string, limit: number = 20) {
+    const students = await this.prisma.student.findMany({
+      where: {
+        OR: [
+          { full_name: { contains: query, mode: 'insensitive' } },
+          { student_code: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        user_id: true,
+        full_name: true,
+        student_code: true,
+        email: true,
+        class_name: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatar_url: true,
+            role: true,
+          },
+        },
+      },
+      take: limit,
+      orderBy: { full_name: 'asc' },
+    });
+
+    return students.map((student) => ({
+      userId: student.user_id.toString(),
+      studentId: student.id.toString(),
+      fullName: student.full_name,
+      studentCode: student.student_code,
+      email: student.email,
+      className: student.class_name,
+      username: student.user.username,
+      avatarUrl: student.user.avatar_url,
+      role: student.user.role,
+    }));
   }
 }
