@@ -1,22 +1,17 @@
 import {
   Controller,
   Get,
-  Post,
-  Body,
   Patch,
   Param,
-  Delete,
+  Body,
   UseGuards,
-  Query,
   Req,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import {
-  CreateAttendanceRecordDto,
   UpdateAttendanceRecordDto,
-  BulkCreateAttendanceDto,
 } from './dto/attendance.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -57,20 +52,6 @@ export class AttendanceController {
 
 
   // ===================== RECORD ENDPOINTS =====================
-
-  @Post('records')
-  @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({ summary: 'Tạo bản ghi điểm danh thủ công cho 1 sinh viên (Dành cho: Giảng Viên)' })
-  createRecord(@Body() dto: CreateAttendanceRecordDto) {
-    return this.attendanceService.createRecord(dto);
-  }
-
-  @Post('records/bulk')
-  @Roles(Role.ADMIN, Role.LECTURER)
-  @ApiOperation({ summary: 'Điểm danh hàng loạt cho nhiều sinh viên (Dành cho: Giảng Viên)' })
-  bulkCreateRecords(@Body() dto: BulkCreateAttendanceDto) {
-    return this.attendanceService.bulkCreateRecords(dto);
-  }
 
 
 

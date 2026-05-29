@@ -49,7 +49,7 @@ export class FaceRecognitionService {
    * 4. Upload ảnh lên Cloudinary
    * 5. Lưu vào DB (student_faces)
    */
-  async registerFace(studentId: bigint, file: Express.Multer.File, note?: string) {
+  async registerFace(studentId: bigint, file: Express.Multer.File) {
     // 1. Validate sinh viên
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
@@ -190,12 +190,11 @@ export class FaceRecognitionService {
   async recognizeAndAttend(
     sessionId: bigint,
     file: Express.Multer.File,
-    threshold?: number,
     user?: any,
     latitude?: number,
     longitude?: number,
   ) {
-    const similarityThreshold = threshold || DEFAULT_THRESHOLD;
+    const similarityThreshold = DEFAULT_THRESHOLD;
 
     // 1. Validate session
     const session = await this.prisma.attendanceSession.findUnique({
@@ -234,13 +233,17 @@ export class FaceRecognitionService {
 
     const sessionDate = new Date(session.date);
     const sessionTime = new Date(session.check_in_time);
+    
+    // Hệ thống lưu getUTCHours() là giờ Việt Nam, nên phải -7 để ra giờ UTC chuẩn
     const startDateTime = new Date(
-      sessionDate.getUTCFullYear(),
-      sessionDate.getUTCMonth(),
-      sessionDate.getUTCDate(),
-      sessionTime.getUTCHours(),
-      sessionTime.getUTCMinutes(),
-      sessionTime.getUTCSeconds()
+      Date.UTC(
+        sessionDate.getUTCFullYear(),
+        sessionDate.getUTCMonth(),
+        sessionDate.getUTCDate(),
+        sessionTime.getUTCHours() - 7,
+        sessionTime.getUTCMinutes(),
+        sessionTime.getUTCSeconds()
+      )
     );
 
     const now = new Date();
@@ -250,8 +253,8 @@ export class FaceRecognitionService {
     let derivedStatus = 1;
     let timeNote = '';
 
-    if (diffMinutes < 0) {
-      throw new BadRequestException('Chưa đến giờ bắt đầu điểm danh');
+    if (diffMinutes < -30) {
+      throw new BadRequestException('Chưa đến giờ điểm danh (chỉ được điểm danh trước 30 phút)');
     } else if (diffMinutes <= 15) {
       derivedStatus = 1; // Đúng giờ
       timeNote = 'Đúng giờ';
@@ -375,7 +378,7 @@ export class FaceRecognitionService {
       data: {
         session_id: sessionId,
         student_id: matchResult.studentId!,
-        arrival_time: new Date(),
+        arrival_time: new Date(new Date().getTime() + 7 * 60 * 60 * 1000), // Lưu thẳng giờ VN vào DB
         status: derivedStatus,
         confidence_score: matchResult.similarity,
         is_manual_override: false,
