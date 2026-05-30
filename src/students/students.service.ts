@@ -492,4 +492,25 @@ export class StudentsService {
       errors: results.errors,
     };
   }
+
+  async getAllDepartments(): Promise<string[]> {
+    const departments = await this.prisma.student.findMany({
+      where: {
+        department_name: {
+          not: null,
+        },
+      },
+      select: {
+        department_name: true,
+      },
+      distinct: ['department_name'],
+      orderBy: {
+        department_name: 'asc',
+      },
+    });
+
+    return departments
+      .map((d) => d.department_name)
+      .filter((dept): dept is string => dept !== null && dept !== undefined);
+  }
 }
