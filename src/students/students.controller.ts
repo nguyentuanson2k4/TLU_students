@@ -132,7 +132,8 @@ export class StudentsController {
   @Get('departments')
   @ApiOperation({
     summary: 'Lấy danh sách tất cả khoa (Admin, Lecturer)',
-    description: 'Lấy danh sách các khoa duy nhất trong hệ thống từ tất cả sinh viên',
+    description:
+      'Lấy danh sách các khoa duy nhất trong hệ thống từ tất cả sinh viên',
   })
   getAllDepartments() {
     return this.studentsService.getAllDepartments();
