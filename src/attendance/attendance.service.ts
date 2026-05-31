@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   UpdateAttendanceRecordDto,
 } from './dto/attendance.dto';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class AttendanceService {
@@ -482,5 +483,176 @@ export class AttendanceService {
       },
       records,
     };
+  }
+
+  // ===================== EXPORT EXCEL =====================
+
+  async exportSessionAttendanceExcel(sessionId: bigint): Promise<Buffer> {
+    const session = await this.prisma.attendanceSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        course_class: {
+          include: {
+            subject: {
+              select: { subject_code: true, subject_name: true },
+            },
+            lecturer: {
+              select: { lecturer_code: true, full_name: true },
+            },
+          },
+        },
+        records: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                student_code: true,
+                full_name: true,
+                class_name: true,
+              },
+            },
+          },
+          orderBy: { student: { student_code: 'asc' } },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Không tìm thấy buổi điểm danh với ID ${sessionId}`);
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Hệ thống quản lý sinh viên';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('Điểm danh');
+
+    // ---- Tiêu đề chính ----
+    worksheet.mergeCells('A1:G1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = 'BẢNG ĐIỂM DANH SINH VIÊN';
+    titleCell.font = { name: 'Times New Roman', size: 16, bold: true, color: { argb: 'FF1F4E79' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(1).height = 35;
+
+    // ---- Thông tin buổi học ----
+    const subjectName = session.course_class?.subject?.subject_name || 'N/A';
+    const subjectCode = session.course_class?.subject?.subject_code || 'N/A';
+    const lecturerName = session.course_class?.lecturer?.full_name || 'N/A';
+    const sessionDate = session.date
+      ? new Date(session.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : 'N/A';
+    const lessonSlot = session.course_class?.lesson_slot || 'N/A';
+    const room = session.course_class?.room || 'N/A';
+
+    const infoStyle: Partial<ExcelJS.Font> = { name: 'Times New Roman', size: 12 };
+    const boldInfoStyle: Partial<ExcelJS.Font> = { name: 'Times New Roman', size: 12, bold: true };
+
+    worksheet.mergeCells('A3:G3');
+    const row3 = worksheet.getCell('A3');
+    row3.value = `Môn học: ${subjectName} (${subjectCode})`;
+    row3.font = infoStyle;
+
+    worksheet.mergeCells('A4:G4');
+    const row4 = worksheet.getCell('A4');
+    row4.value = `Giảng viên: ${lecturerName}`;
+    row4.font = infoStyle;
+
+    worksheet.mergeCells('A5:C5');
+    const row5a = worksheet.getCell('A5');
+    row5a.value = `Ngày: ${sessionDate}`;
+    row5a.font = infoStyle;
+
+    worksheet.mergeCells('D5:G5');
+    const row5b = worksheet.getCell('D5');
+    row5b.value = `Tiết học: ${lessonSlot}  |  Phòng: ${room}`;
+    row5b.font = infoStyle;
+
+    // ---- Header bảng ----
+    const headerRow = worksheet.addRow([]);  // Row 6 trống
+    const tableHeaderRow = worksheet.addRow(['STT', 'Mã SV', 'Họ và Tên', 'Lớp', 'Trạng thái', 'Giờ đến', 'Ghi chú']);
+    tableHeaderRow.eachCell((cell) => {
+      cell.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+    });
+    tableHeaderRow.height = 25;
+
+    // ---- Map trạng thái ----
+    const statusMap: Record<number, { label: string; color: string }> = {
+      0: { label: 'Vắng', color: 'FFFF4D4D' },
+      1: { label: 'Có mặt', color: 'FF4CAF50' },
+      2: { label: 'Đi muộn', color: 'FFFFB74D' },
+      3: { label: 'Có phép', color: 'FF42A5F5' },
+    };
+
+    // ---- Dữ liệu sinh viên ----
+    session.records.forEach((record, index) => {
+      const statusInfo = statusMap[record.status] || { label: `Không rõ (${record.status})`, color: 'FFCCCCCC' };
+      const arrivalTime = record.arrival_time
+        ? new Date(record.arrival_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        : '-';
+
+      const row = worksheet.addRow([
+        index + 1,
+        record.student?.student_code || '',
+        record.student?.full_name || '',
+        record.student?.class_name || '',
+        statusInfo.label,
+        arrivalTime,
+        record.note || '',
+      ]);
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Times New Roman', size: 11 };
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 3 ? 'left' : 'center' };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' },
+        };
+
+        // Tô màu cột Trạng thái
+        if (colNumber === 5) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: statusInfo.color } };
+          cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+        }
+      });
+    });
+
+    // ---- Thống kê cuối bảng ----
+    const totalRecords = session.records.length;
+    const presentCount = session.records.filter(r => r.status === 1).length;
+    const lateCount = session.records.filter(r => r.status === 2).length;
+    const absentCount = session.records.filter(r => r.status === 0).length;
+    const excusedCount = session.records.filter(r => r.status === 3).length;
+
+    worksheet.addRow([]); // Row trống
+    const summaryStartRow = worksheet.addRow(['', '', 'THỐNG KÊ', '', '', '', '']);
+    summaryStartRow.getCell(3).font = boldInfoStyle;
+
+    worksheet.addRow(['', '', `Tổng số sinh viên: ${totalRecords}`, '', '', '', '']).getCell(3).font = infoStyle;
+    worksheet.addRow(['', '', `Có mặt: ${presentCount}`, '', `Đi muộn: ${lateCount}`, '', '']).eachCell(c => c.font = infoStyle);
+    worksheet.addRow(['', '', `Vắng: ${absentCount}`, '', `Có phép: ${excusedCount}`, '', '']).eachCell(c => c.font = infoStyle);
+
+    // ---- Thiết lập độ rộng cột ----
+    worksheet.getColumn(1).width = 6;   // STT
+    worksheet.getColumn(2).width = 15;  // Mã SV
+    worksheet.getColumn(3).width = 30;  // Họ và Tên
+    worksheet.getColumn(4).width = 15;  // Lớp
+    worksheet.getColumn(5).width = 14;  // Trạng thái
+    worksheet.getColumn(6).width = 12;  // Giờ đến
+    worksheet.getColumn(7).width = 25;  // Ghi chú
+
+    // ---- Xuất ra Buffer ----
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 }

@@ -85,30 +85,6 @@ export class AuthService {
     };
   }
 
-  async googleLogin(req) {
-    if (!req.user || !req.user.email) {
-      return 'No user from google';
-    }
-    
-    let user = await this.usersService.findUserBySystemEmail(req.user.email);
-    
-    if (!user) {
-      throw new UnauthorizedException('Email này chưa được liên kết với bất kỳ tài khoản sinh viên hay giảng viên nào trong hệ thống.');
-    }
-
-    const tokens = await this.getTokens(user.id, user.username, user.role);
-    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
-
-    return {
-      ...tokens,
-      user: {
-        id: user.id.toString(),
-        username: user.username,
-        role: user.role,
-      }
-    };
-  }
-
   async forgotPassword(email: string) {
     const user = await this.usersService.findUserBySystemEmail(email);
     if (!user) {

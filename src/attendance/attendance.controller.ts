@@ -6,6 +6,8 @@ import {
   Body,
   UseGuards,
   Req,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import {
@@ -71,6 +73,19 @@ export class AttendanceController {
     return this.attendanceService.updateRecord(BigInt(id), dto);
   }
 
+  // ===================== EXPORT =====================
 
+  @Get('sessions/:id/export-excel')
+  @Roles(Role.ADMIN, Role.LECTURER)
+  @ApiOperation({ summary: 'Xuất danh sách điểm danh của buổi học ra file Excel (Dành cho: Giảng Viên)' })
+  async exportSessionExcel(@Param('id') id: string, @Res({ passthrough: true }) res: any): Promise<StreamableFile> {
+    const buffer = await this.attendanceService.exportSessionAttendanceExcel(BigInt(id));
 
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename=diem-danh-buoi-${id}.xlsx`,
+    });
+
+    return new StreamableFile(buffer);
+  }
 }

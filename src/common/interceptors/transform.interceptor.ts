@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor, StreamableFile } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
@@ -17,6 +17,11 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
   intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
     return next.handle().pipe(
       map((data) => {
+        // Bỏ qua StreamableFile (file download) - không wrap trong JSON
+        if (data instanceof StreamableFile) {
+          return data;
+        }
+
         // Retrieve the metadata message or use 'Thành công' as default
         let message = this.reflector.get<string>(RESPONSE_MESSAGE, context.getHandler()) || 'Thành công';
         

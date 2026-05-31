@@ -2,7 +2,6 @@ import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
-import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { Prisma } from '@prisma/client';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -40,20 +39,6 @@ export class AuthController {
     const userId = req.user.id || req.user.userId;
     const refreshToken = req.headers.authorization.replace('Bearer ', '').trim();
     return this.authService.refreshTokens(userId, refreshToken);
-  }
-
-  @ApiOperation({ summary: 'Chuyển hướng đăng nhập Google' })
-  @Get('google')
-  @UseGuards(GoogleOAuthGuard)
-  async googleAuth(@Request() req) {
-    // Logic handled by Passport Google Strategy
-  }
-
-  @ApiOperation({ summary: 'Xử lý callback đăng nhập Google' })
-  @Get('google/callback')
-  @UseGuards(GoogleOAuthGuard)
-  googleAuthRedirect(@Request() req) {
-    return this.authService.googleLogin(req);
   }
 
   @ApiOperation({ summary: 'Yêu cầu gửi mã OTP để quên mật khẩu' })
