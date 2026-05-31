@@ -1,9 +1,18 @@
-import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, Gender } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as ExcelJS from 'exceljs';
-import { CreateStudentDto, UpdateStudentDto, UpdateStudentProfileDto } from './dto/student.dto';
+import {
+  CreateStudentDto,
+  UpdateStudentDto,
+  UpdateStudentProfileDto,
+} from './dto/student.dto';
 
 @Injectable()
 export class StudentsService {
@@ -17,7 +26,9 @@ export class StudentsService {
       where: { username },
     });
     if (existingUser) {
-      throw new ConflictException(`Tài khoản với mã sinh viên ${username} đã tồn tại!`);
+      throw new ConflictException(
+        `Tài khoản với mã sinh viên ${username} đã tồn tại!`,
+      );
     }
 
     // Check uniqueness of student_code in students table
@@ -25,7 +36,9 @@ export class StudentsService {
       where: { student_code: data.student_code },
     });
     if (existingStudent) {
-      throw new ConflictException(`Mã sinh viên ${data.student_code} đã tồn tại!`);
+      throw new ConflictException(
+        `Mã sinh viên ${data.student_code} đã tồn tại!`,
+      );
     }
 
     // Check uniqueness of email
@@ -161,7 +174,10 @@ export class StudentsService {
     });
   }
 
-  async updateProfile(userId: bigint, data: UpdateStudentProfileDto): Promise<any> {
+  async updateProfile(
+    userId: bigint,
+    data: UpdateStudentProfileDto,
+  ): Promise<any> {
     const student = await this.prisma.student.findUnique({
       where: { user_id: userId },
     });
@@ -229,7 +245,10 @@ export class StudentsService {
     return this.getClassesForStudent(student.id, semesterId);
   }
 
-  private async getClassesForStudent(studentId: bigint, semesterId?: bigint): Promise<any[]> {
+  private async getClassesForStudent(
+    studentId: bigint,
+    semesterId?: bigint,
+  ): Promise<any[]> {
     const whereClause: any = {
       enrollments: {
         some: {
@@ -265,10 +284,7 @@ export class StudentsService {
           },
         },
       },
-      orderBy: [
-        { start_date: 'asc' },
-        { day_of_week: 'asc' },
-      ],
+      orderBy: [{ start_date: 'asc' }, { day_of_week: 'asc' }],
     });
 
     // Lấy danh sách course_class_id
@@ -293,12 +309,27 @@ export class StudentsService {
     });
 
     // Tính stats cho từng course_class
-    const statsMap = new Map<string, { total: number; present: number; late: number; absent: number; excused: number }>();
+    const statsMap = new Map<
+      string,
+      {
+        total: number;
+        present: number;
+        late: number;
+        absent: number;
+        excused: number;
+      }
+    >();
 
     for (const record of attendanceRecords) {
       const classId = record.session.course_class_id.toString();
       if (!statsMap.has(classId)) {
-        statsMap.set(classId, { total: 0, present: 0, late: 0, absent: 0, excused: 0 });
+        statsMap.set(classId, {
+          total: 0,
+          present: 0,
+          late: 0,
+          absent: 0,
+          excused: 0,
+        });
       }
       const stat = statsMap.get(classId)!;
       stat.total++;
@@ -311,10 +342,17 @@ export class StudentsService {
     // Gắn student_stats vào từng schedule
     return schedules.map((schedule) => {
       const classId = schedule.id.toString();
-      const stat = statsMap.get(classId) || { total: 0, present: 0, late: 0, absent: 0, excused: 0 };
-      const attendanceRate = stat.total > 0
-        ? Math.round(((stat.present + stat.late) / stat.total) * 100)
-        : 0;
+      const stat = statsMap.get(classId) || {
+        total: 0,
+        present: 0,
+        late: 0,
+        absent: 0,
+        excused: 0,
+      };
+      const attendanceRate =
+        stat.total > 0
+          ? Math.round(((stat.present + stat.late) / stat.total) * 100)
+          : 0;
 
       return {
         ...schedule,
@@ -363,7 +401,9 @@ export class StudentsService {
     });
 
     if (students.length === 0) {
-      throw new NotFoundException(`Không tìm thấy sinh viên nào trong danh sách cung cấp.`);
+      throw new NotFoundException(
+        `Không tìm thấy sinh viên nào trong danh sách cung cấp.`,
+      );
     }
 
     const userIds = students.map((s) => s.user_id);
@@ -394,7 +434,10 @@ export class StudentsService {
     }
 
     // Expected columns: student_code, password, full_name, dob, gender, phone_number, class_name, email, address, major_name, department_name
-    const results: { success: any[]; errors: any[] } = { success: [], errors: [] };
+    const results: { success: any[]; errors: any[] } = {
+      success: [],
+      errors: [],
+    };
     const rows: any[] = [];
 
     worksheet.eachRow((row, rowNumber) => {
@@ -416,15 +459,31 @@ export class StudentsService {
         const majorName = values[9]?.toString().trim() || null;
         const departmentName = values[10]?.toString().trim() || null;
 
-        if (!studentCode || !fullName || !dobRaw || !genderRaw || !phoneNumber || !className || !email) {
-          results.errors.push({ row: rowNumber, student_code: studentCode || 'N/A', error: 'Thiếu thông tin bắt buộc.' });
+        if (
+          !studentCode ||
+          !fullName ||
+          !dobRaw ||
+          !genderRaw ||
+          !phoneNumber ||
+          !className ||
+          !email
+        ) {
+          results.errors.push({
+            row: rowNumber,
+            student_code: studentCode || 'N/A',
+            error: 'Thiếu thông tin bắt buộc.',
+          });
           continue;
         }
 
         // Parse gender
         const gender = Gender[genderRaw as keyof typeof Gender];
         if (!gender) {
-          results.errors.push({ row: rowNumber, student_code: studentCode, error: `Giới tính không hợp lệ: ${genderRaw}. Chấp nhận: MALE, FEMALE, OTHER.` });
+          results.errors.push({
+            row: rowNumber,
+            student_code: studentCode,
+            error: `Giới tính không hợp lệ: ${genderRaw}. Chấp nhận: MALE, FEMALE, OTHER.`,
+          });
           continue;
         }
 
@@ -436,14 +495,24 @@ export class StudentsService {
           dob = new Date(dobRaw.toString());
         }
         if (isNaN(dob.getTime())) {
-          results.errors.push({ row: rowNumber, student_code: studentCode, error: `Ngày sinh không hợp lệ: ${dobRaw}` });
+          results.errors.push({
+            row: rowNumber,
+            student_code: studentCode,
+            error: `Ngày sinh không hợp lệ: ${dobRaw}`,
+          });
           continue;
         }
 
         // Check duplicates
-        const existingUser = await this.prisma.user.findUnique({ where: { username: studentCode } });
+        const existingUser = await this.prisma.user.findUnique({
+          where: { username: studentCode },
+        });
         if (existingUser) {
-          results.errors.push({ row: rowNumber, student_code: studentCode, error: 'Mã sinh viên đã tồn tại trong hệ thống.' });
+          results.errors.push({
+            row: rowNumber,
+            student_code: studentCode,
+            error: 'Mã sinh viên đã tồn tại trong hệ thống.',
+          });
           continue;
         }
 
@@ -452,7 +521,11 @@ export class StudentsService {
 
         const created = await this.prisma.$transaction(async (tx) => {
           const newUser = await tx.user.create({
-            data: { username: studentCode, password: hashedPassword, role: Role.STUDENT },
+            data: {
+              username: studentCode,
+              password: hashedPassword,
+              role: Role.STUDENT,
+            },
           });
 
           const student = await tx.student.create({
@@ -471,7 +544,11 @@ export class StudentsService {
             },
           });
 
-          return { student_code: student.student_code, full_name: student.full_name, email: student.email };
+          return {
+            student_code: student.student_code,
+            full_name: student.full_name,
+            email: student.email,
+          };
         });
 
         results.success.push(created);
@@ -491,5 +568,26 @@ export class StudentsService {
       success: results.success,
       errors: results.errors,
     };
+  }
+
+  async getAllDepartments(): Promise<string[]> {
+    const departments = await this.prisma.student.findMany({
+      where: {
+        department_name: {
+          not: null,
+        },
+      },
+      select: {
+        department_name: true,
+      },
+      distinct: ['department_name'],
+      orderBy: {
+        department_name: 'asc',
+      },
+    });
+
+    return departments
+      .map((d) => d.department_name)
+      .filter((dept): dept is string => dept !== null && dept !== undefined);
   }
 }

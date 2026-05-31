@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -48,7 +53,10 @@ export class AuthService {
 
   async login(user: any) {
     const tokens = await this.getTokens(user.id, user.username, user.role);
-    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
+    await this.usersService.setCurrentRefreshToken(
+      tokens.refresh_token,
+      user.id,
+    );
 
     return {
       ...tokens,
@@ -56,7 +64,7 @@ export class AuthService {
         id: user.id.toString(),
         username: user.username,
         role: user.role,
-      }
+      },
     };
   }
 
@@ -74,25 +82,31 @@ export class AuthService {
     }
 
     const tokens = await this.getTokens(user.id, user.username, user.role);
-    await this.usersService.setCurrentRefreshToken(tokens.refresh_token, user.id);
+    await this.usersService.setCurrentRefreshToken(
+      tokens.refresh_token,
+      user.id,
+    );
     return {
       ...tokens,
       user: {
         id: user.id.toString(),
         username: user.username,
         role: user.role,
-      }
+      },
     };
   }
+
 
   async forgotPassword(email: string) {
     const user = await this.usersService.findUserBySystemEmail(email);
     if (!user) {
-      throw new BadRequestException('Email không tồn tại trong hệ thống. Vui lòng kiểm tra lại.');
+      throw new BadRequestException(
+        'Email không tồn tại trong hệ thống. Vui lòng kiểm tra lại.',
+      );
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     await this.usersService.saveOtp(user.id, otp);
     await this.mailService.sendOtpEmail(email, otp);
 
@@ -109,7 +123,9 @@ export class AuthService {
 
     // @ts-ignore: properties added to PrismaSchema
     if (!dbUser.reset_password_otp || !dbUser.reset_password_expires) {
-      throw new BadRequestException('Mã OTP không hợp lệ hoặc chưa được yêu cầu.');
+      throw new BadRequestException(
+        'Mã OTP không hợp lệ hoặc chưa được yêu cầu.',
+      );
     }
 
     // @ts-ignore: properties added to PrismaSchema
@@ -126,7 +142,7 @@ export class AuthService {
   }
 
   async resetPassword(email: string, otp: string, newPassword: string) {
-    await this.verifyOtp(email, otp); 
+    await this.verifyOtp(email, otp);
 
     const user = await this.usersService.findUserBySystemEmail(email);
     if (!user) {
@@ -142,6 +158,40 @@ export class AuthService {
 
     await this.usersService.clearOtp(user.id);
 
-    return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.' };
+    return {
+      message:
+        'Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.',
+    };
+  }
+
+  async changePassword(
+    userId: string | bigint,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new BadRequestException('Người dùng không tồn tại.');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không chính xác.');
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    await this.usersService.update(userId, {
+      password: hashedPassword,
+    });
+
+    return { message: 'Thay đổi mật khẩu thành công.' };
   }
 }

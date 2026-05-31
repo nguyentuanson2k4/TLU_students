@@ -1,4 +1,11 @@
-import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common';
+import {
+  Controller,
+  Request,
+  Post,
+  UseGuards,
+  Get,
+  Body,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
@@ -6,12 +13,18 @@ import { Prisma } from '@prisma/client';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ResponseMessage } from '../common/decorators/response-message.decorator';
-import { LoginDto, ForgotPasswordDto, VerifyOtpDto, ResetPasswordDto } from './dto/auth.dto';
+import {
+  LoginDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
+  ChangePasswordDto,
+} from './dto/auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService) {}
 
   @ApiOperation({ summary: 'Đăng nhập tài khoản' })
   @ApiBody({ type: LoginDto })
@@ -37,7 +50,9 @@ export class AuthController {
   @Post('refresh')
   async refreshTokens(@Request() req) {
     const userId = req.user.id || req.user.userId;
-    const refreshToken = req.headers.authorization.replace('Bearer ', '').trim();
+    const refreshToken = req.headers.authorization
+      .replace('Bearer ', '')
+      .trim();
     return this.authService.refreshTokens(userId, refreshToken);
   }
 
@@ -56,6 +71,27 @@ export class AuthController {
   @ApiOperation({ summary: 'Đặt lại mật khẩu mới' })
   @Post('reset-password')
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.otp, resetPasswordDto.newPassword);
+    return this.authService.resetPassword(
+      resetPasswordDto.email,
+      resetPasswordDto.otp,
+      resetPasswordDto.newPassword,
+    );
+  }
+
+  @ApiOperation({ summary: 'Thay đổi mật khẩu cho user đã đăng nhập' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @ResponseMessage('Thay đổi mật khẩu thành công')
+  async changePassword(
+    @Request() req,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    const userId = req.user.id || req.user.userId;
+    return this.authService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
   }
 }

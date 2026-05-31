@@ -14,7 +14,10 @@ export class LoginDto {
 }
 
 export class ForgotPasswordDto {
-  @ApiProperty({ example: 'user@example.com', description: 'Email để nhận mã OTP' })
+  @ApiProperty({
+    example: 'user@example.com',
+    description: 'Email để nhận mã OTP',
+  })
   @IsEmail()
   @IsNotEmpty()
   email!: string;
@@ -44,6 +47,21 @@ export class ResetPasswordDto {
   otp!: string;
 
   @ApiProperty({ example: 'newpassword123' })
+  @IsString()
+  @MinLength(6)
+  newPassword!: string;
+}
+
+export class ChangePasswordDto {
+  @ApiProperty({
+    example: 'currentpassword123',
+    description: 'Mật khẩu hiện tại',
+  })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword!: string;
+
+  @ApiProperty({ example: 'newpassword123', description: 'Mật khẩu mới' })
   @IsString()
   @MinLength(6)
   newPassword!: string;
