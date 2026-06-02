@@ -11,6 +11,7 @@ import { CloudinaryService } from '../face-recognition/cloudinary.service';
 import { CreatePostDto, PostRecipientType } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { Role } from '@prisma/client';
+import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
 export class PostsService {
@@ -20,6 +21,7 @@ export class PostsService {
     private readonly prisma: PrismaService,
     private readonly fcmService: FcmService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly rabbitmqService: RabbitmqService,
   ) {}
 
   // ===================== TẠO THÔNG BÁO =====================
@@ -203,42 +205,17 @@ export class PostsService {
       });
     }
 
-    // Tạo Notification cho mỗi người nhận (liên kết source_id → post.id)
-    await this.prisma.notification.createMany({
-      data: recipientUserIds.map((userId) => ({
-        user_id: BigInt(userId),
-        title: data.title,
-        message:
-          data.content.length > 200
-            ? data.content.substring(0, 200) + '...'
-            : data.content,
-        notification_type: 'POST',
-        source_id: post.id,
-        is_read: false,
-        fcm_sent: false,
-      })),
+    // Bắn sự kiện sang RabbitMQ để tạo Notification & gửi FCM ngầm (Tránh khóa luồng chính)
+    this.logger.log(`Emitting 'post_created_fanout' to RabbitMQ for ${recipientUserIds.length} users`);
+    this.rabbitmqService.emit('post_created_fanout', {
+      postId: post.id.toString(), // BigInt to string for JSON serialization
+      recipientUserIds,
+      title: data.title,
+      content: data.content,
     });
 
     this.logger.log(
-      `Created ${recipientUserIds.length} notifications for post ID ${post.id}`,
-    );
-
-    // Gửi FCM push notification (async, không block response)
-    this.fcmService
-      .sendToUsers(recipientUserIds, data.title, data.content)
-      .then((result) => {
-        this.logger.log(
-          `FCM push sent for post ID ${post.id}: ${result.successCount} success, ${result.failureCount} failures`,
-        );
-      })
-      .catch((err) => {
-        this.logger.error(
-          `FCM push failed for post ID ${post.id}: ${err.message}`,
-        );
-      });
-
-    this.logger.log(
-      `Post created with ID ${post.id}, sent to ${recipientUserIds.length} recipients`,
+      `Post created with ID ${post.id}, queued notifications to ${recipientUserIds.length} recipients`,
     );
 
     return {
@@ -812,18 +789,60 @@ export class PostsService {
         throw error;
       }
 
-      this.logger.error(
-        `Failed to upload file: ${(error as Error).message}`,
-        (error as Error).stack,
-      );
-
-      throw new BadRequestException(
-        `Upload thất bại: ${(error as Error).message}`,
-      );
+      this.logger.error(`Failed to upload file: ${(error as Error).message}`, (error as Error).stack);
+      throw error;
     }
   }
 
-  // ===================== HELPERS =====================
+  // ===================== WORKER RABBITMQ =====================
+  /**
+   * Chạy ngầm: Xử lý thông báo sau khi Post được tạo
+   * Chia nhỏ (chunk) danh sách người nhận để tạo DB và bắn FCM an toàn
+   */
+  async handlePostCreatedFanout(data: {
+    postId: string;
+    recipientUserIds: number[];
+    title: string;
+    content: string;
+  }): Promise<void> {
+    const { postId, recipientUserIds, title, content } = data;
+    this.logger.log(`[Worker] Bắt đầu xử lý ${recipientUserIds.length} notifications cho Post ${postId}`);
+    
+    const CHUNK_SIZE = 100; // Chia nhỏ mỗi 100 người
+    for (let i = 0; i < recipientUserIds.length; i += CHUNK_SIZE) {
+      const chunk = recipientUserIds.slice(i, i + CHUNK_SIZE);
+      
+      try {
+        // 1. Lưu vào Database
+        await this.prisma.notification.createMany({
+          data: chunk.map((userId) => ({
+            user_id: BigInt(userId),
+            title: title,
+            message: content.length > 200 ? content.substring(0, 200) + '...' : content,
+            notification_type: 'POST',
+            source_id: BigInt(postId),
+            is_read: false,
+            fcm_sent: true, // Đã gửi FCM ngầm nên đánh dấu true luôn
+          })),
+        });
+
+        // 2. Bắn Push Notification (FCM)
+        const fcmResult = await this.fcmService.sendToUsers(chunk, title, content);
+        this.logger.log(
+          `[Worker] Chunk ${i / CHUNK_SIZE + 1}: FCM push ${fcmResult.successCount} thành công, ${fcmResult.failureCount} thất bại`
+        );
+      } catch (error: any) {
+        this.logger.error(`[Worker] Lỗi xử lý chunk ${i / CHUNK_SIZE + 1} cho Post ${postId}: ${error.message}`);
+        // Quăng lỗi ra để RabbitMQ biết mà NACK (Không xóa tin nhắn, giữ lại Retry)
+        throw error; 
+      }
+    }
+    
+    this.logger.log(`[Worker] Đã xử lý xong toàn bộ thông báo cho Post ${postId}`);
+  }
+
+  // ===================== HELPER =====================
+
 
   /**
    * Format response cho post

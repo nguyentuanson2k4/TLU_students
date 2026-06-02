@@ -1,4 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -18,6 +19,19 @@ import { Prisma } from '@prisma/client';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Cấu hình RabbitMQ Microservice Consumer với Manual ACK
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
+      queue: 'main_queue',
+      noAck: false, // BẮT BUỘC: Xác nhận thủ công (chống mất tin nhắn khi lỗi)
+      queueOptions: {
+        durable: true,
+      },
+    },
+  });
 
   app.enableCors();
 
@@ -46,6 +60,9 @@ async function bootstrap() {
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
+
+  // Bắt đầu lắng nghe các Microservice (bao gồm RabbitMQ) trước khi mở cổng HTTP
+  await app.startAllMicroservices();
 
   let basePort = parseInt(process.env.PORT || '3000', 10);
 
