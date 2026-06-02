@@ -29,9 +29,11 @@ import { MessagingModule } from './messaging/messaging.module';
 import { AdminChatModule } from './admin-chat/admin-chat.module';
 import { TuitionModule } from './tuition/tuition.module';
 import { PostsModule } from './posts/posts.module';
+import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
+    RabbitmqModule,
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     PrismaModule,

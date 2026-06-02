@@ -286,7 +286,8 @@ model AttendanceSession {
   course_class_id  BigInt
   check_in_time    DateTime? @db.Time
   date             DateTime? @db.Date
-  is_reminder_sent Boolean   @default(false)
+  is_reminder_sent         Boolean   @default(false)
+  is_auto_absent_processed Boolean   @default(false)
 
   course_class CourseClass @relation(fields: [course_class_id], references: [id], onDelete: Cascade)
 
