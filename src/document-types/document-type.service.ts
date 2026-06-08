@@ -162,6 +162,9 @@ export class DocumentTypeService {
 
   /**
    * Xóa loại tài liệu
+   * - Chỉ cho phép xóa nếu tất cả service request đều có status 3 (Hoàn thành) hoặc 4 (Từ chối)
+   * - Tự động xóa các service request hoàn thành/từ chối trước khi xóa document type
+   * Status: 1=Chờ xử lý, 2=Đang xử lý, 3=Hoàn thành, 4=Từ chối, 5=Huỷ
    */
   async delete(id: number) {
     this.logger.log(`Deleting document type with ID: ${id}`);
@@ -176,19 +179,60 @@ export class DocumentTypeService {
       throw new NotFoundException(`Loại tài liệu với ID ${id} không tồn tại`);
     }
 
-    // Kiểm tra có yêu cầu dịch vụ đang sử dụng
-    const count = await this.prisma.serviceRequest.count({
-      where: { document_type_id: id },
+    // Kiểm tra có yêu cầu dịch vụ chưa hoàn thành hoặc chưa từ chối
+    const pendingRequests = await this.prisma.serviceRequest.findMany({
+      where: {
+        document_type_id: id,
+        // Status != 3 (Completed) and != 4 (Rejected)
+        status: {
+          notIn: [3, 4],
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        created_at: true,
+      },
     });
 
-    if (count > 0) {
+    if (pendingRequests.length > 0) {
+      const statusMap = {
+        1: 'Chờ xử lý',
+        2: 'Đang xử lý',
+        5: 'Huỷ',
+      };
+
+      const statusDetails = pendingRequests
+        .map(
+          (req) =>
+            `ID: ${req.id}, Trạng thái: ${statusMap[req.status] || 'Không rõ'}`,
+        )
+        .join('; ');
+
       this.logger.warn(
-        `Document type with ID ${id} is in use by ${count} service requests`,
+        `Document type with ID ${id} cannot be deleted due to ${pendingRequests.length} incomplete service requests`,
       );
-      throw new BadRequestException(
-        `Không thể xóa loại tài liệu này vì đang được sử dụng bởi ${count} yêu cầu dịch vụ`,
-      );
+
+      throw new BadRequestException({
+        message: `Không thể xóa loại tài liệu này vì còn ${pendingRequests.length} yêu cầu dịch vụ chưa hoàn thành hoặc chưa được từ chối`,
+        incompleteRequests: pendingRequests.length,
+        details: statusDetails,
+      });
     }
+
+    // Xóa tất cả service request hoàn thành/từ chối trước khi xóa document type
+    const deletedRequests = await this.prisma.serviceRequest.deleteMany({
+      where: {
+        document_type_id: id,
+        status: {
+          in: [3, 4],
+        },
+      },
+    });
+
+    this.logger.log(
+      `Deleted ${deletedRequests.count} completed/rejected service requests for document type ${id}`,
+    );
 
     await this.prisma.documentType.delete({
       where: { id },
