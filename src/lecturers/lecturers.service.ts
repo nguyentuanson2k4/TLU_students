@@ -234,7 +234,7 @@ export class LecturersService {
     });
   }
 
-  async getMyClasses(userId: bigint): Promise<any[]> {
+  async getMyClasses(userId: bigint, semesterId: bigint): Promise<any[]> {
     // Tìm giảng viên từ user_id
     const lecturer = await this.prisma.lecturer.findUnique({
       where: { user_id: userId },
@@ -244,10 +244,11 @@ export class LecturersService {
       throw new NotFoundException('Không tìm thấy hồ sơ giảng viên.');
     }
 
-    // Lấy tất cả các lớp được phân công dạy
+    // Lấy các lớp được phân công dạy theo kỳ
     const courseClasses = await this.prisma.courseClass.findMany({
       where: {
         lecturer_id: lecturer.id,
+        semester_id: semesterId,
       },
       include: {
         subject: {
