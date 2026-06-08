@@ -72,7 +72,7 @@ export class AttendanceService {
 
     if (activeSessions.length === 0) return null;
 
-    // Lọc ra lớp học chuẩn bị diễn ra hoặc đang diễn ra
+    // Tìm 1 môn đang diễn ra hoặc sắp diễn ra (bỏ qua môn đã hết giờ)
     const currentMs = now.getTime();
     let targetSession: typeof activeSessions[0] | null = null;
 
@@ -86,35 +86,15 @@ export class AttendanceService {
       const [startHour, startMinute] = startStr.trim().split(':').map(Number);
       const [endHour, endMinute] = endStr.trim().split(':').map(Number);
 
-      const startTime = new Date(now);
-      startTime.setHours(startHour, startMinute, 0, 0);
-
       const endTime = new Date(now);
       endTime.setHours(endHour, endMinute, 0, 0);
 
-      // Điểm danh có thể bắt đầu trước 30 phút so với giờ học
-      const checkInStartTime = startTime.getTime() - 30 * 60000;
-      
-      // Nếu thời gian hiện tại nằm trong khoảng (giờ học - 30p) đến giờ kết thúc
-      if (currentMs >= checkInStartTime && currentMs <= endTime.getTime()) {
-        targetSession = session;
-        break;
-      }
-    }
+      // Bỏ qua môn đã hết giờ
+      if (currentMs > endTime.getTime()) continue;
 
-    // Nếu không có lớp nào đang diễn ra, tìm lớp tiếp theo chưa diễn ra
-    if (!targetSession) {
-      const nextSession = activeSessions.find(session => {
-        if (!session.course_class || !session.course_class.lesson_slot) return false;
-        const [startStr] = session.course_class.lesson_slot.split('-');
-        if (!startStr) return false;
-        const [startHour, startMinute] = startStr.trim().split(':').map(Number);
-        const startTime = new Date(now);
-        startTime.setHours(startHour, startMinute, 0, 0);
-        
-        return startTime.getTime() > currentMs;
-      });
-      targetSession = nextSession || null;
+      // Môn này đang diễn ra hoặc sắp diễn ra → lấy luôn (vì đã sort theo check_in_time ASC)
+      targetSession = session;
+      break;
     }
 
     if (!targetSession) return null;

@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   Req,
   UseInterceptors,
@@ -17,6 +18,7 @@ import {
   ApiOperation,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
@@ -96,12 +98,21 @@ export class LecturersController {
   @Get('my-classes')
   @Roles(Role.LECTURER)
   @ApiOperation({
-    summary: 'Lấy danh sách các lớp học phần được phân công dạy (Lecturer)',
+    summary: 'Lấy danh sách các lớp học phần được phân công dạy theo kỳ (Lecturer)',
   })
-  async getMyClasses(@Req() req: any) {
+  @ApiQuery({
+    name: 'semesterId',
+    required: true,
+    description: 'ID của kỳ học',
+    type: String,
+  })
+  async getMyClasses(
+    @Req() req: any,
+    @Query('semesterId') semesterId: string,
+  ) {
     const userId =
       typeof req.user.id === 'string' ? BigInt(req.user.id) : req.user.id;
-    return this.lecturersService.getMyClasses(userId);
+    return this.lecturersService.getMyClasses(userId, BigInt(semesterId));
   }
 
   @Get(':code')
