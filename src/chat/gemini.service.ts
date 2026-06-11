@@ -25,7 +25,7 @@ export class GeminiService {
   async generateAnswer(question: string, context: string, chatHistory?: { role: string; content: string }[]): Promise<string> {
     try {
       const systemPrompt = `Bạn là trợ lý ảo của Trường Đại học Thăng Long, hỗ trợ sinh viên giải đáp thắc mắc.
-Hãy trả lời câu hỏi dựa trên thông tin được cung cấp bên dưới. 
+Hãy trả lời câu hỏi dựa trên ngữ cảnh lịch sử trò chuyện và thông tin được cung cấp bên dưới. 
 Nếu thông tin không đủ để trả lời, hãy nói rõ rằng bạn không có đủ thông tin và gợi ý sinh viên liên hệ phòng ban phù hợp.
 Trả lời bằng tiếng Việt, ngắn gọn, chính xác và thân thiện.
 
@@ -36,21 +36,40 @@ ${context || 'Không có tài liệu tham khảo.'}
       // Build contents array with history
       const contents: { role: string; parts: { text: string }[] }[] = [];
 
-      // Add chat history if available
+      let lastRole = '';
       if (chatHistory && chatHistory.length > 0) {
         for (const msg of chatHistory) {
-          contents.push({
-            role: msg.role === 'USER' ? 'user' : 'model',
-            parts: [{ text: msg.content }],
-          });
+          const role = msg.role === 'USER' ? 'user' : 'model';
+          if (!msg.content || msg.content.trim() === '') continue;
+
+          if (role === lastRole) {
+            // Gộp với tin nhắn trước đó nếu cùng role
+            contents[contents.length - 1].parts[0].text += '\n\n' + msg.content;
+          } else {
+            contents.push({
+              role: role,
+              parts: [{ text: msg.content }],
+            });
+            lastRole = role;
+          }
         }
       }
 
+      // Đảm bảo tin nhắn đầu tiên luôn là user
+      if (contents.length > 0 && contents[0].role !== 'user') {
+        contents.shift();
+      }
+
       // Add current question
-      contents.push({
-        role: 'user',
-        parts: [{ text: question }],
-      });
+      const currentQuestionRole = 'user';
+      if (contents.length > 0 && contents[contents.length - 1].role === currentQuestionRole) {
+        contents[contents.length - 1].parts[0].text += '\n\n' + question;
+      } else {
+        contents.push({
+          role: currentQuestionRole,
+          parts: [{ text: question }],
+        });
+      }
 
       const response = await this.genAI.models.generateContent({
         model: this.chatModel,

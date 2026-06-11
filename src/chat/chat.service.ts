@@ -37,14 +37,7 @@ export class ChatService {
       sessionId = newSession.id;
     }
 
-    // 2. Lưu tin nhắn của user
-    await this.prisma.chatMessage.create({
-      data: {
-        session_id: sessionId,
-        sender_type: 'USER',
-        message_content: dto.message,
-      },
-    });
+    // (Tin nhắn của user sẽ được lưu sau khi gọi API thành công để tránh rác DB nếu API lỗi)
 
     // 3. Tìm kiếm tài liệu liên quan (RAG retrieval)
     const relevantDocs = await this.knowledgeBaseService.searchRelevant(dto.message, 5);
@@ -61,16 +54,28 @@ export class ChatService {
 
     const chatHistory = recentMessages
       .reverse()
-      .slice(0, -1) // bỏ tin nhắn vừa gửi (đã ở cuối)
       .map((msg) => ({
         role: msg.sender_type,
         content: msg.message_content || '',
       }));
 
+    // Đảm bảo tin nhắn đầu tiên luôn là của USER (Gemini API yêu cầu)
+    if (chatHistory.length > 0 && chatHistory[0].role !== 'USER') {
+      chatHistory.shift();
+    }
+
     // 5. Gọi Gemini API để generate câu trả lời
     const answer = await this.geminiService.generateAnswer(dto.message, context, chatHistory);
 
-    // 6. Lưu câu trả lời của bot
+    // 6. Lưu tin nhắn của user và câu trả lời của bot (lưu tuần tự để đảm bảo thứ tự)
+    await this.prisma.chatMessage.create({
+      data: {
+        session_id: sessionId,
+        sender_type: 'USER',
+        message_content: dto.message,
+      },
+    });
+
     const botMessage = await this.prisma.chatMessage.create({
       data: {
         session_id: sessionId,
