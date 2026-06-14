@@ -154,6 +154,8 @@ export class ServiceRequestsService {
       const mappedData = data.map((item) => ({
         id: item.id,
         status: item.status,
+        reason: item.reason,
+        attachment_url: item.attachment_url,
         created_at: item.created_at,
         documentType: {
           id: item.documentType?.id,
@@ -219,6 +221,8 @@ export class ServiceRequestsService {
       return {
         id: serviceRequest.id,
         status: serviceRequest.status,
+        reason: serviceRequest.reason,
+        attachment_url: serviceRequest.attachment_url,
         created_at: serviceRequest.created_at,
         documentType: {
           id: serviceRequest.documentType?.id,
