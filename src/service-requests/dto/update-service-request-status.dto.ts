@@ -19,4 +19,9 @@ export class UpdateServiceRequestStatusDto {
   @IsString({ message: 'Message must be a string' })
   @MaxLength(500, { message: 'Message must not exceed 500 characters' })
   message?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Attachment URL must be a string' })
+  @MaxLength(500, { message: 'Attachment URL must not exceed 500 characters' })
+  attachment_url?: string;
 }

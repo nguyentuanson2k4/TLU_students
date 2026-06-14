@@ -564,6 +564,9 @@ export class ServiceRequestsService {
         where: { id: requestId },
         data: {
           status: updateDto.status,
+          ...(updateDto.attachment_url && {
+            attachment_url: updateDto.attachment_url,
+          }),
         },
         include: {
           user: {
